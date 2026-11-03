@@ -58,6 +58,7 @@ class Settings(BaseSettings):
     jwt_issuer: str = "keylo-api"
     jwt_audience: str = "keylo-clients"
     access_token_expire_minutes: int = Field(default=30, ge=1, le=10080)
+    lead_create_rate_limit_per_minute: int = Field(default=30, ge=1, le=10000)
 
     @property
     def api_v1_prefix(self) -> str:

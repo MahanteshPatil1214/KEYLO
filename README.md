@@ -13,7 +13,8 @@ v2.
 ## Current status
 
 **Module 0 — Backend Foundation**, **Module 1 — Authentication & User
-Management**, and **Module 2 — Projects & Fact Sheets** are implemented.
+Management**, **Module 2 — Projects & Fact Sheets**, and **Module 3 — Lead
+Management** are implemented.
 
 Module 0 provides the shared infrastructure:
 
@@ -51,8 +52,20 @@ Module 2 adds:
 - Role-aware reads that hide drafts from buyers and sales executives.
 - An AI-safe `get_approved_facts()` service boundary for future retrieval.
 
-Lead, conversation, AI, booking, handoff, notification, and dashboard modules
-are not implemented yet.
+Module 3 adds:
+
+- UUID-based `leads` and `lead_assignments` tables with an Alembic migration.
+- Public lead intake endpoint (`POST /api/v1/leads`) with rate limiting and strict privileged-field rejection.
+- Active-project validation ensuring enquiries attach only to live projects.
+- Normalized contact deduplication (email and phone) with PostgreSQL advisory locks (`pg_advisory_xact_lock`) against concurrent collisions.
+- Proactive duplicate-check endpoint for administrators (`GET /api/v1/leads/duplicates/check`).
+- Paginated lead listing, search (name, email, phone digits), and multi-field filtering.
+- Field privilege separation: sales executives cannot modify administrative fields (`project_id`, `source`).
+- Strict lifecycle state machine validation (`NEW`, `CONTACTED`, `QUALIFIED`, `VISIT_BOOKED`, `VISIT_CANCELLED`, `VISITED`, `CONVERTED`, `NOT_INTERESTED`, `LOST`).
+- Contact consent enforcement: contact-requiring status transitions and executive assignment require `consent_to_contact: true`.
+- Executive assignment and re-assignment with assignment history preservation and database-enforced single active assignment partial unique index.
+
+Conversation, AI, booking, handoff, notification, and dashboard modules are not implemented yet.
 
 ## Technology stack
 
@@ -428,6 +441,14 @@ There is no public admin registration endpoint.
 | `POST` | `/api/v1/facts/{fact_id}/approve` | Admin | Approve a draft or publish a staged edit |
 | `POST` | `/api/v1/facts/{fact_id}/reject` | Admin | Discard a staged edit or unpublish a fact |
 | `GET` | `/api/v1/facts/{fact_id}/versions` | Admin | Paginated answer version history |
+| `POST` | `/api/v1/leads` | Public | Create a lead enquiry |
+| `GET` | `/api/v1/leads/duplicates/check` | Admin | Check duplicates by normalized email/phone |
+| `GET` | `/api/v1/leads` | Admin / Sales Exec | Paginated lead listing, search, and filters |
+| `GET` | `/api/v1/leads/{lead_id}` | Admin or assigned Sales Exec | Lead detail |
+| `PATCH` | `/api/v1/leads/{lead_id}` | Admin or assigned Sales Exec | Update lead contact/budget fields |
+| `PATCH` | `/api/v1/leads/{lead_id}/status` | Admin or assigned Sales Exec | Lifecycle status transition |
+| `POST` | `/api/v1/leads/{lead_id}/assign` | Admin | Assign or reassign to an active sales executive |
+| `GET` | `/api/v1/leads/{lead_id}/assignments` | Admin or assigned Sales Exec | Paginated assignment history |
 | `GET` | `/docs` | Public | Swagger UI |
 
 ### Example registration
@@ -638,6 +659,144 @@ Listing endpoints use `page`, `page_size`, and return `items`, `total`, `page`,
 `status` or `category`; non-admin status filters are clamped to `ACTIVE` and
 `APPROVED` respectively.
 
+
+## Lead management
+
+Module 3 implements lead intake, source attribution, duplicate handling,
+lifecycle status progression, and sales executive assignment history.
+
+### Lead lifecycle
+
+```text
+       +-------------------------------------------------------+
+       |                                                       |
+       v                                                       |
+     [NEW]                                                     |
+       |                                                       |
+       +------------+------------+                             |
+       |            |            |                             |
+       v            v            |                             |
+  [CONTACTED] -> [QUALIFIED]     |                             |
+       |            |            |                             |
+       +------------+            |                             |
+       |                         |                             |
+       v                         v                             |
+  [VISIT_BOOKED] --------> [VISIT_CANCELLED]                   |
+       |                                                       |
+       v                                                       |
+   [VISITED]                                                   |
+       |                                                       |
+       v                                                       |
+  [CONVERTED] (terminal)                                       |
+                                                               |
+  [NOT_INTERESTED] (terminal) <--------------------------------+
+  [LOST]           (terminal) <--------------------------------+
+```
+
+Allowed transitions:
+- `NEW` -> `CONTACTED`, `QUALIFIED`, `NOT_INTERESTED`, `LOST`
+- `CONTACTED` -> `QUALIFIED`, `NOT_INTERESTED`, `VISIT_BOOKED`, `LOST`
+- `QUALIFIED` -> `VISIT_BOOKED`, `NOT_INTERESTED`, `LOST`
+- `VISIT_BOOKED` -> `VISITED`, `VISIT_CANCELLED`, `NOT_INTERESTED`, `LOST`
+- `VISIT_CANCELLED` -> `VISIT_BOOKED`, `NOT_INTERESTED`, `LOST`
+- `VISITED` -> `CONVERTED`, `NOT_INTERESTED`, `LOST`
+- `CONVERTED`, `NOT_INTERESTED`, `LOST` are terminal states.
+
+Transitions that violate the lifecycle return HTTP `400 BAD_REQUEST`.
+
+### Consent enforcement
+
+- Moving to contact-requiring states (`CONTACTED`, `QUALIFIED`, `VISIT_BOOKED`, `VISITED`, `CONVERTED`) requires `consent_to_contact: true`.
+- Assigning an executive to a lead requires `consent_to_contact: true`.
+- Moving to `NOT_INTERESTED` or `LOST` is always permitted without consent so buyer opt-outs can be recorded.
+
+### Sources
+
+Initial lead acquisition channels:
+- `WEBSITE`
+- `PROPERTY_PORTAL`
+- `SOCIAL_MEDIA`
+- `HOARDING`
+- `REFERRAL`
+- `OTHER`
+
+### Duplicate detection rules
+
+- Phone numbers are normalized by stripping whitespace and punctuation, converting leading `00` to `+`, and validating 7-15 digits.
+- Email addresses are normalized by stripping whitespace, converting to lowercase, and treating empty strings as null.
+- Enquiries matching an existing lead by phone or email return HTTP `409 CONFLICT` with `matching_lead_ids` and matched field names.
+- Concurrency protection: In PostgreSQL, transactional advisory locks (`pg_advisory_xact_lock`) on hashed contact keys prevent duplicate creation race conditions.
+- Administrators can proactively verify duplicates via `GET /api/v1/leads/duplicates/check?phone=...&email=...`.
+
+### Assignment rules
+
+- Only users with role `ADMIN` may assign or reassign leads.
+- The target executive must be an active user with role `SALES_EXECUTIVE`.
+- Reassignments preserve history by setting `unassigned_at` on the previous active assignment and creating a new assignment row.
+- The partial unique index `uq_lead_assignments_active_lead` (`WHERE unassigned_at IS NULL`) guarantees that a lead has at most one active assignment at any time.
+
+### Role permissions
+
+- **ADMIN**: Access all leads, filter by any executive, update administrative fields (`project_id`, `source`), assign executives, and check duplicates.
+- **SALES_EXECUTIVE**: Access only leads actively assigned to them on active projects. Attempts to query unassigned leads or leads on inactive projects return HTTP `404` to prevent leaking lead existence. Changing `project_id` or `source` returns HTTP `403`.
+- **BUYER**: Forbidden from accessing internal lead endpoints (HTTP `403`).
+- **PUBLIC**: Unauthenticated lead intake at `POST /api/v1/leads`. Schema rejects privileged fields (`status`, `assigned_executive_id`).
+
+### Example lead enquiry intake (Public)
+
+```powershell
+$body = @{
+  full_name = "Rajesh Sharma"
+  phone = "+91 98200 12345"
+  email = "rajesh.sharma@example.com"
+  project_id = "$($project.id)"
+  source = "WEBSITE"
+  budget_min = 7500000
+  budget_max = 12000000
+  preferred_configuration = "3 BHK"
+  consent_to_contact = $true
+} | ConvertTo-Json
+
+$lead = Invoke-RestMethod -Method Post `
+  -Uri http://127.0.0.1:8000/api/v1/leads `
+  -ContentType application/json `
+  -Body $body
+```
+
+### Example duplicate conflict response (HTTP 409)
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "CONFLICT",
+    "message": "Conflict",
+    "details": [
+      {
+        "duplicate": true,
+        "matching_lead_ids": [
+          "74d630d2-5967-4b61-9b38-8cf5ccecf7d4"
+        ],
+        "matching_fields": [
+          "phone"
+        ],
+        "summary": "An existing lead matches the supplied phone. Review the existing record instead of creating a duplicate."
+      }
+    ]
+  }
+}
+```
+
+### Example executive assignment (Admin)
+
+```powershell
+Invoke-RestMethod -Method Post `
+  -Uri "http://127.0.0.1:8000/api/v1/leads/$($lead.id)/assign" `
+  -Headers $adminHeaders `
+  -ContentType application/json `
+  -Body (@{ executive_id = "$($executive.id)" } | ConvertTo-Json)
+```
+
 ## Health endpoints
 
 ### `GET /`
@@ -764,6 +923,7 @@ pytest tests/integration/test_users.py
 pytest tests/integration/test_authorization.py
 pytest tests/integration/test_projects.py
 pytest tests/integration/test_facts.py
+pytest tests/integration/test_leads.py
 pytest -k health
 ```
 
@@ -787,13 +947,13 @@ The suite:
 
 ## Manual verification performed
 
-Modules 0, 1, and 2 were verified with:
+Modules 0, 1, 2, and 3 were verified with:
 
 ```text
 docker compose up -d db        -> PostgreSQL 16 healthy
-alembic upgrade head           -> 692d4e5b740f then abb9e59a730a applied
-alembic downgrade -1           -> Module 2 tables removed
-alembic upgrade head           -> Module 2 tables restored
+alembic upgrade head           -> 692d4e5b740f, abb9e59a730a, 9daee97d8ebe applied
+alembic downgrade -1           -> Module 3 tables removed
+alembic upgrade head           -> Module 3 tables restored
 alembic check                  -> No new upgrade operations detected.
 python -m scripts.seed_roles   -> roles created, then idempotent on re-run
 uvicorn app.main:app           -> application started
@@ -809,7 +969,12 @@ GET /api/v1/projects           -> 403 for anonymous, active-only for buyer
 POST /api/v1/projects/{id}/facts -> 201 draft fact (admin)
 POST /api/v1/facts/{id}/approve  -> 200 approved fact
 GET /api/v1/facts/{id}         -> 200 for buyer, 404 for draft fact
-pytest                         -> 88 passed
+POST /api/v1/leads             -> 201 lead created (public intake)
+GET /api/v1/leads/duplicates/check -> 200 duplicate check (admin)
+POST /api/v1/leads/{id}/assign -> 200 assigned executive (admin)
+GET /api/v1/leads/{id}/assignments -> 200 assignment history
+PATCH /api/v1/leads/{id}/status -> 200 status transition
+pytest                         -> 109 passed
 ```
 
 The automated suite uses SQLite for deterministic isolation; the live manual
@@ -839,9 +1004,9 @@ check exercised the PostgreSQL migration and endpoints.
 - Fact categories are normalized uppercase free-form labels. No fixed category
   vocabulary is mandated by `PROJECT.md`; a future agreed allowlist can be
   enforced at the schema boundary without changing storage.
-- Groq/AI integration, lead intake, conversations, bookings, notifications, and
-  dashboards remain out of scope. Only the approved-facts retrieval boundary is
-  provided for the future AI module.
+- Groq/AI integration, conversations, bookings, notifications, and
+  dashboards remain out of scope. Approved-facts and lead-management boundaries
+  are provided for future modules.
 - Tests use SQLite for isolation; the live manual check exercised PostgreSQL.
 - Docker Compose starts PostgreSQL only. Containerising the API and frontend is
   outside the current module scope.
