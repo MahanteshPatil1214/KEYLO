@@ -11,6 +11,9 @@ This directory currently implements:
 - **Module 1: Authentication & User Management** — roles, users, buyer
   registration, login, JWT access tokens, current-user dependencies,
   role-based authorization, profile updates, and admin user management.
+- **Module 2: Projects & Fact Sheets** — projects, draft/approved facts, staged
+  approved-fact edits, approval/rejection, answer version history, role-aware
+  reads, and the AI-safe approved-facts retrieval boundary.
 
 See the [repository README](../README.md) for the full project overview,
 architecture, API examples, and security notes.
@@ -76,11 +79,14 @@ alembic check
 python -m scripts.seed_roles
 ```
 
-The first revision creates `roles` and `users`. The role seed creates `BUYER`,
-`SALES_EXECUTIVE`, and `ADMIN`, and is safe to run repeatedly.
+The first revision creates `roles` and `users`; the second creates `projects`,
+`project_facts`, and `fact_versions`, including status checks, foreign keys,
+unique slug, unique per-fact version numbers, and query indexes. The role seed
+creates `BUYER`, `SALES_EXECUTIVE`, and `ADMIN`, and is safe to run repeatedly.
 
-`alembic/env.py` imports the Module 1 models so autogeneration can see them.
-Future model modules must also be imported there before creating a migration.
+`alembic/env.py` imports the Module 1 and Module 2 models so autogeneration can
+see them. Future model modules must also be imported there before creating a
+migration.
 
 ## First administrator
 
@@ -144,6 +150,17 @@ after restarting with another `.env`. Tokens also expire after
 | `GET` | `/api/v1/users/{user_id}` | Self or admin | User profile |
 | `PATCH` | `/api/v1/users/{user_id}` | Self or admin | Update permitted fields |
 | `PATCH` | `/api/v1/users/{user_id}/status` | Admin | Activate/deactivate account |
+| `POST` | `/api/v1/projects` | Admin | Create a project |
+| `GET` | `/api/v1/projects` | Authenticated | Paginated project listing |
+| `GET` | `/api/v1/projects/{project_id}` | Authenticated | Project detail |
+| `PATCH` | `/api/v1/projects/{project_id}` | Admin | Update details/status |
+| `POST` | `/api/v1/projects/{project_id}/facts` | Admin | Create a draft fact |
+| `GET` | `/api/v1/projects/{project_id}/facts` | Authenticated | Paginated fact listing |
+| `GET` | `/api/v1/facts/{fact_id}` | Authenticated | Fact detail |
+| `PATCH` | `/api/v1/facts/{fact_id}` | Admin | Edit/stage a fact change |
+| `POST` | `/api/v1/facts/{fact_id}/approve` | Admin | Approve or publish a staged edit |
+| `POST` | `/api/v1/facts/{fact_id}/reject` | Admin | Discard a staged edit/unpublish |
+| `GET` | `/api/v1/facts/{fact_id}/versions` | Admin | Paginated answer history |
 | `GET` | `/docs` | Public | Swagger UI |
 
 Example registration:
@@ -179,6 +196,41 @@ Invoke-RestMethod `
   -Headers @{ Authorization = "Bearer $($token.access_token)" }
 ```
 
+## Projects and fact sheets
+
+Projects move through `DRAFT`, `ACTIVE`, and `INACTIVE`. Buyers and sales
+executives can read only `ACTIVE` projects. Project writes are admin-only, and
+`DRAFT` cannot be re-entered after publication.
+
+Facts start as `DRAFT` and are hidden from non-admin readers. Admins approve
+facts before they become eligible for buyer or AI use. Editing an approved fact
+stages the proposed category, question, and answer in `pending_*` fields; the
+previously approved content remains visible until an admin approves the staged
+edit. Rejecting a staged edit discards it. Rejecting an approved fact with no
+staged edit moves it back to `DRAFT`.
+
+Fact answer history is append-only:
+
+- Version 1 is created with the initial answer (`previous_answer = null`).
+- Each canonical answer change appends the next sequential version.
+- Category-only or question-only changes do not create duplicate answer
+  versions.
+- `(fact_id, version_number)` is unique, and updates run in transactions with a
+  fact row lock on PostgreSQL.
+- `changed_by` records the editor who proposed the published answer.
+
+Future AI code must call the service boundary instead of querying models:
+
+```python
+from app.modules.projects.service import get_approved_facts
+
+facts = get_approved_facts(session, project_id, category="LOCATION")
+```
+
+It returns only approved facts for an active project and never returns staged
+pending content. Listing endpoints support `page` and `page_size`; admins may
+filter projects/facts by `status` and facts by `category`.
+
 Errors use the shared envelope:
 
 ```json
@@ -207,12 +259,17 @@ pytest tests/integration
 pytest tests/integration/test_auth.py
 pytest tests/integration/test_authorization.py
 pytest tests/integration/test_users.py
+pytest tests/integration/test_projects.py
+pytest tests/integration/test_facts.py
 ```
 
 The suite forces testing configuration before importing the app, uses a fresh
 in-memory SQLite database with dependency overrides, seeds roles only in the
 isolated test database, and never connects to the developer or production
-database. PostgreSQL migrations and live endpoints are verified separately.
+database. It covers project lifecycle, slug conflicts, fact approval/rejection,
+staged approved-fact edits, draft visibility, sequential and deduplicated
+version history, role restrictions, and approved-facts retrieval. PostgreSQL
+migrations and live endpoints are verified separately.
 
 ## Layout
 
@@ -224,7 +281,8 @@ app/
 ├── api/v1/                 Versioned router and health endpoints
 └── modules/
     ├── auth/               JWT/password security, login, dependencies, router
-    └── users/              Roles/users models, repository, service, router
+    ├── users/              Roles/users models, repository, service, router
+    └── projects/           Projects, facts, versions, approval, AI boundary
 alembic/                    Migration environment and versions
 scripts/                    Role seeding and first-admin provisioning
 tests/                      Unit and integration tests
@@ -239,6 +297,14 @@ docker-compose.yml          PostgreSQL 16 with a persistent volume
   `is_verified=false`.
 - The three roles are fixed for the MVP; role CRUD is not exposed.
 - Account deletion is not implemented; deactivation is used instead.
+- Project/fact deletion is not implemented; facts are rejected/unpublished
+  instead of deleted.
+- Fact version history tracks answers only. Category/question changes update the
+  fact audit fields but do not create version rows.
+- Fact categories are free-form uppercase labels until an agreed allowlist is
+  introduced.
+- No Groq/AI, lead, conversation, booking, notification, or dashboard module is
+  implemented yet; only the approved-facts service boundary exists.
 - Synchronous database access by design.
 - Docker Compose provides PostgreSQL only; the API runs under Uvicorn.
 - Tests use SQLite; PostgreSQL connectivity and migrations are verified manually.

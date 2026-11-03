@@ -12,8 +12,8 @@ v2.
 
 ## Current status
 
-**Module 0 — Backend Foundation** and **Module 1 — Authentication & User
-Management** are implemented.
+**Module 0 — Backend Foundation**, **Module 1 — Authentication & User
+Management**, and **Module 2 — Projects & Fact Sheets** are implemented.
 
 Module 0 provides the shared infrastructure:
 
@@ -38,6 +38,18 @@ Module 1 adds:
 - Self-service profile reads/updates and admin user management.
 - Account activation/deactivation with immediate token rejection.
 - Integration and security tests for authentication and authorization.
+
+Module 2 adds:
+
+- UUID-based `projects`, `project_facts`, and `fact_versions` tables with a
+  second Alembic migration.
+- Admin-only project creation, editing, pagination, and lifecycle transitions.
+- Independently editable facts with draft and approved states.
+- Safe approved-fact editing through staged `pending_*` content.
+- Admin approval and rejection workflows with buyer-visible publish control.
+- Append-only, sequential answer history and a paginated version endpoint.
+- Role-aware reads that hide drafts from buyers and sales executives.
+- An AI-safe `get_approved_facts()` service boundary for future retrieval.
 
 Lead, conversation, AI, booking, handoff, notification, and dashboard modules
 are not implemented yet.
@@ -79,7 +91,14 @@ KEYLO/
 │   │   │   │   ├── dependencies.py
 │   │   │   │   ├── security.py
 │   │   │   │   └── exceptions.py
-│   │   │   └── users/
+│   │   │   ├── users/
+│   │   │   │   ├── router.py
+│   │   │   │   ├── service.py
+│   │   │   │   ├── repository.py
+│   │   │   │   ├── models.py
+│   │   │   │   ├── schemas.py
+│   │   │   │   └── exceptions.py
+│   │   │   └── projects/
 │   │   │       ├── router.py
 │   │   │       ├── service.py
 │   │   │       ├── repository.py
@@ -264,7 +283,9 @@ alembic check
 ```
 
 Module 1 adds the first revision, which creates the `roles` and `users` tables.
-When a later module adds models:
+Module 2 adds the second revision, which creates `projects`, `project_facts`,
+and `fact_versions` with their indexes and constraints. When a later module adds
+models:
 
 1. Import its model module in `backend/alembic/env.py` so tables register on
    `Base.metadata`.
@@ -396,6 +417,17 @@ There is no public admin registration endpoint.
 | `GET` | `/api/v1/users/{user_id}` | Self or admin | User profile |
 | `PATCH` | `/api/v1/users/{user_id}` | Self or admin | Update permitted profile fields |
 | `PATCH` | `/api/v1/users/{user_id}/status` | Admin | Activate or deactivate an account |
+| `POST` | `/api/v1/projects` | Admin | Create a project |
+| `GET` | `/api/v1/projects` | Authenticated | Paginated projects; non-admins see active projects only |
+| `GET` | `/api/v1/projects/{project_id}` | Authenticated | Project detail; non-admins see active projects only |
+| `PATCH` | `/api/v1/projects/{project_id}` | Admin | Update project details or lifecycle status |
+| `POST` | `/api/v1/projects/{project_id}/facts` | Admin | Create a draft fact |
+| `GET` | `/api/v1/projects/{project_id}/facts` | Authenticated | Paginated facts; non-admins see approved facts only |
+| `GET` | `/api/v1/facts/{fact_id}` | Authenticated | Fact detail; non-admins see approved facts only |
+| `PATCH` | `/api/v1/facts/{fact_id}` | Admin | Edit a draft or stage an approved-fact edit |
+| `POST` | `/api/v1/facts/{fact_id}/approve` | Admin | Approve a draft or publish a staged edit |
+| `POST` | `/api/v1/facts/{fact_id}/reject` | Admin | Discard a staged edit or unpublish a fact |
+| `GET` | `/api/v1/facts/{fact_id}/versions` | Admin | Paginated answer version history |
 | `GET` | `/docs` | Public | Swagger UI |
 
 ### Example registration
@@ -484,6 +516,127 @@ Invoke-RestMethod -Method Patch `
 Public registration rejects extra fields such as `role`. A non-admin cannot
 change any user's role, and no user can change their own role through this
 endpoint. Only admins can change account status.
+
+## Projects and fact sheets
+
+A **project** is a developer offering with a name, unique slug, location,
+description, optional RERA number, lifecycle status, and creator. A **fact** is
+one independently editable question-and-answer record belonging to a project.
+Facts are the approved source material that future AI answers must use.
+
+### Project lifecycle
+
+| Status | Meaning |
+| --- | --- |
+| `DRAFT` | Admin-only preparation state; hidden from buyers and sales executives |
+| `ACTIVE` | Published project; readable by authenticated buyers and sales executives |
+| `INACTIVE` | Temporarily unpublished; hidden from buyers and sales executives |
+
+Admins may create a project in any valid initial state; the default is `DRAFT`.
+Allowed updates are `DRAFT → ACTIVE`, `DRAFT → INACTIVE`, `ACTIVE → INACTIVE`,
+and `INACTIVE → ACTIVE`. Once a project has left `DRAFT`, it cannot be moved
+back to `DRAFT`, so published projects retain an explicit activation history.
+
+Slugs are lowercase kebab-case and unique. If `slug` is omitted, it is generated
+from the name; a generated collision receives a numeric suffix. Supplying a
+duplicate slug returns `409`. Supplying an invalid slug returns `422`.
+
+### Fact approval workflow
+
+New facts always start as `DRAFT`. Draft facts are never returned to buyers or
+sales executives and are never eligible for AI retrieval.
+
+1. An admin creates or edits a draft fact. Draft edits are applied directly.
+2. An admin approves the draft with `POST /api/v1/facts/{fact_id}/approve`.
+3. Once approved, the fact becomes buyer-visible whenever its project is
+   `ACTIVE`.
+4. Editing an approved fact does **not** overwrite buyer-visible content.
+   Instead, the proposed category, question, and answer are stored in
+   `pending_*` fields and returned to admins as `pending_changes`.
+5. The approved content remains visible until an admin approves the staged
+   change. Approval publishes it atomically and clears `pending_changes`.
+6. Rejecting a staged edit discards it and keeps the previous approved content.
+   Rejecting an approved fact that has no staged edit returns it to `DRAFT`,
+   removing it from buyer-visible reads.
+
+Only administrators can create, edit, approve, reject, or inspect fact history.
+Buyers and sales executives can read only approved facts belonging to active
+projects; hidden records return `404` rather than revealing their existence.
+
+### Version history
+
+`FactVersion` is append-only. The initial fact answer is recorded as version 1
+with `previous_answer = null`. Each later canonical answer change appends the
+next sequential version in the same transaction as the fact update. Version
+numbers are unique per fact through a database constraint, and fact rows are
+locked on PostgreSQL while updates are applied.
+
+If an edit changes only the category or question and leaves the answer
+unchanged, no new version row is created. This avoids duplicate history entries
+for unchanged answer content. `changed_by` records the admin who proposed the
+published answer; for staged edits, that is the editor, not necessarily the
+approver. History is available only to admins through the paginated endpoint.
+
+### AI retrieval boundary
+
+Future AI code must not query project tables directly. It should call:
+
+```python
+from app.modules.projects.service import get_approved_facts
+
+facts = get_approved_facts(session, project_id, category="LOCATION")
+```
+
+The service returns plain `ApprovedFactContent` DTOs (`fact_id`, `category`,
+`question`, `answer`) and returns an empty list when the project is missing or
+not `ACTIVE`. It never returns draft facts or staged pending content. The
+`category` filter is normalized to uppercase; passing `None` returns all
+approved categories.
+
+### Example project and fact workflow
+
+```powershell
+$headers = @{ Authorization = "Bearer $($tokenResponse.access_token)" }
+
+$projectBody = @{
+  name = "Skyline Residences"
+  location = "Pune, Maharashtra"
+  description = "Residential project"
+  rera_number = "P52100012345"
+} | ConvertTo-Json
+
+$project = Invoke-RestMethod -Method Post `
+  -Uri http://127.0.0.1:8000/api/v1/projects `
+  -Headers $headers `
+  -ContentType application/json `
+  -Body $projectBody
+
+$factBody = @{
+  category = "LOCATION"
+  question = "Where is the project located?"
+  answer = "The project is in Pune."
+} | ConvertTo-Json
+
+$fact = Invoke-RestMethod -Method Post `
+  -Uri "http://127.0.0.1:8000/api/v1/projects/$($project.id)/facts" `
+  -Headers $headers `
+  -ContentType application/json `
+  -Body $factBody
+
+Invoke-RestMethod -Method Post `
+  -Uri "http://127.0.0.1:8000/api/v1/facts/$($fact.id)/approve" `
+  -Headers $headers
+```
+
+To propose a change to that approved fact, call `PATCH /api/v1/facts/{fact_id}`
+with the new fields. The response keeps the old `answer` and adds
+`pending_changes`. Call `POST /api/v1/facts/{fact_id}/approve` to publish it or
+`POST /api/v1/facts/{fact_id}/reject` to discard it.
+
+Listing endpoints use `page`, `page_size`, and return `items`, `total`, `page`,
+`page_size`, and `pages`. Admins may filter projects by `status` and facts by
+`status` or `category`; non-admin status filters are clamped to `ACTIVE` and
+`APPROVED` respectively.
 
 ## Health endpoints
 
@@ -609,6 +762,8 @@ pytest tests/integration
 pytest tests/integration/test_auth.py
 pytest tests/integration/test_users.py
 pytest tests/integration/test_authorization.py
+pytest tests/integration/test_projects.py
+pytest tests/integration/test_facts.py
 pytest -k health
 ```
 
@@ -624,15 +779,21 @@ The suite:
   logging, session cleanup, registration, duplicate/invalid registration,
   password policy and hashing, login, inactive accounts, expired/invalid
   tokens, role authorization, self-escalation, profile updates, pagination,
-  user listing, and account status changes.
+  user listing, account status changes, project creation/updates, slug
+  conflicts, lifecycle transitions, project and fact pagination, draft
+  visibility, fact approval/rejection, staged approved-fact edits, sequential
+  version history, unchanged-edit deduplication, role restrictions, and
+  `get_approved_facts()` retrieval.
 
 ## Manual verification performed
 
-Modules 0 and 1 were verified with:
+Modules 0, 1, and 2 were verified with:
 
 ```text
 docker compose up -d db        -> PostgreSQL 16 healthy
-alembic upgrade head           -> 692d4e5b740f applied
+alembic upgrade head           -> 692d4e5b740f then abb9e59a730a applied
+alembic downgrade -1           -> Module 2 tables removed
+alembic upgrade head           -> Module 2 tables restored
 alembic check                  -> No new upgrade operations detected.
 python -m scripts.seed_roles   -> roles created, then idempotent on re-run
 uvicorn app.main:app           -> application started
@@ -643,7 +804,12 @@ POST /api/v1/auth/register     -> 201 buyer account
 POST /api/v1/auth/login        -> 200 bearer access token
 GET /api/v1/auth/me            -> 200 authenticated profile
 GET /api/v1/users              -> 403 for buyer, 200 for admin
-pytest                         -> 72 passed
+POST /api/v1/projects          -> 201 draft project (admin)
+GET /api/v1/projects           -> 403 for anonymous, active-only for buyer
+POST /api/v1/projects/{id}/facts -> 201 draft fact (admin)
+POST /api/v1/facts/{id}/approve  -> 200 approved fact
+GET /api/v1/facts/{id}         -> 200 for buyer, 404 for draft fact
+pytest                         -> 88 passed
 ```
 
 The automated suite uses SQLite for deterministic isolation; the live manual
@@ -665,6 +831,17 @@ check exercised the PostgreSQL migration and endpoints.
   fixed for the MVP.
 - Account deletion is not implemented. Deactivation preserves user records for
   future audit and business references.
+- Project and fact deletion endpoints are not implemented. Facts are unpublished
+  through rejection or an inactive project rather than deleted.
+- Fact version history records answer changes only. Category and question
+  changes are audited on the fact's `updated_by`/`updated_at` fields but do not
+  create a separate version row.
+- Fact categories are normalized uppercase free-form labels. No fixed category
+  vocabulary is mandated by `PROJECT.md`; a future agreed allowlist can be
+  enforced at the schema boundary without changing storage.
+- Groq/AI integration, lead intake, conversations, bookings, notifications, and
+  dashboards remain out of scope. Only the approved-facts retrieval boundary is
+  provided for the future AI module.
 - Tests use SQLite for isolation; the live manual check exercised PostgreSQL.
 - Docker Compose starts PostgreSQL only. Containerising the API and frontend is
   outside the current module scope.

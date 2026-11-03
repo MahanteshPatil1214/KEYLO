@@ -15,6 +15,7 @@ from sqlalchemy import engine_from_config, pool
 
 from app.core.config import get_settings
 from app.db.base import Base
+from app.modules.projects import models as projects_models  # noqa: F401
 from app.modules.users import models  # noqa: F401
 
 config = context.config
@@ -28,7 +29,8 @@ settings = get_settings()
 target_metadata = Base.metadata
 
 # Future model modules must be imported above so Alembic can autogenerate
-# their tables. Module 1 models are imported immediately after ``Base``.
+# their tables. Module 1 and Module 2 models are imported immediately after
+# ``Base``.
 
 
 def _database_url() -> str:
