@@ -1,0 +1,11 @@
+# Backend-local files are also covered by the repository root .gitignore.
+.env
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
