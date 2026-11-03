@@ -9,6 +9,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.core.config import Settings
+from tests.support import TEST_JWT_SECRET
 
 
 def make_settings(**overrides: Any) -> Settings:
@@ -20,6 +21,7 @@ def make_settings(**overrides: Any) -> Settings:
         ),
         "cors_allowed_origins": ["http://localhost:3000"],
         "log_level": "INFO",
+        "jwt_secret_key": TEST_JWT_SECRET,
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)
@@ -37,6 +39,7 @@ def test_development_defaults() -> None:
 
 def test_settings_are_read_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     database_password = secrets.token_urlsafe(16)
+    jwt_secret = secrets.token_urlsafe(48)
 
     monkeypatch.setenv("APP_NAME", "Environment API")
     monkeypatch.setenv("ENVIRONMENT", "testing")
@@ -50,6 +53,8 @@ def test_settings_are_read_from_environment(monkeypatch: pytest.MonkeyPatch) -> 
         "CORS_ALLOWED_ORIGINS", "http://one.example, http://two.example"
     )
     monkeypatch.setenv("LOG_LEVEL", "debug")
+    monkeypatch.setenv("JWT_SECRET_KEY", jwt_secret)
+    monkeypatch.setenv("ACCESS_TOKEN_EXPIRE_MINUTES", "45")
 
     settings = Settings(_env_file=None)
 
@@ -63,6 +68,7 @@ def test_settings_are_read_from_environment(monkeypatch: pytest.MonkeyPatch) -> 
         "http://two.example",
     ]
     assert settings.log_level == "DEBUG"
+    assert settings.access_token_expire_minutes == 45
 
 
 def test_cors_origins_accept_json_list() -> None:
@@ -88,6 +94,35 @@ def test_database_url_is_masked_in_settings_representation() -> None:
     assert database_password not in repr(settings)
     assert database_password not in str(settings)
     assert database_password in settings.database_url.get_secret_value()
+
+
+def test_jwt_secret_is_masked_in_settings_representation() -> None:
+    secret = secrets.token_urlsafe(48)
+    settings = make_settings(jwt_secret_key=secret)
+
+    assert secret not in repr(settings)
+    assert secret not in str(settings)
+    assert secret in settings.jwt_secret_key.get_secret_value()
+
+
+def test_short_jwt_secret_is_rejected() -> None:
+    with pytest.raises(ValidationError):
+        make_settings(jwt_secret_key="too-short")
+
+
+def test_production_rejects_placeholder_jwt_secret() -> None:
+    placeholder = "change-me-" + "x" * 48
+
+    with pytest.raises(ValidationError):
+        make_settings(
+            environment="production",
+            cors_allowed_origins=["https://app.keylo.example"],
+            database_url=(
+                "postgresql+psycopg2://keylo:"
+                f"{secrets.token_urlsafe(16)}@db:5432/keylo_db"
+            ),
+            jwt_secret_key=placeholder,
+        )
 
 
 @pytest.mark.parametrize("log_level", ["verbose", "not-a-level", ""])

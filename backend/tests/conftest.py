@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import os
 import secrets
-from collections.abc import Generator
+from collections.abc import Callable, Generator
+from uuid import uuid4
+
+from tests.support import TEST_JWT_SECRET, TEST_PASSWORD
 
 _TEST_ENVIRONMENT = {
     "APP_NAME": "Keylo API",
@@ -22,6 +25,8 @@ _TEST_ENVIRONMENT = {
     ),
     "CORS_ALLOWED_ORIGINS": '["http://testserver"]',
     "LOG_LEVEL": "WARNING",
+    "JWT_SECRET_KEY": TEST_JWT_SECRET,
+    "ACCESS_TOKEN_EXPIRE_MINUTES": "30",
 }
 os.environ.update(_TEST_ENVIRONMENT)
 
@@ -37,6 +42,9 @@ from app.core.config import Settings  # noqa: E402
 from app.db.base import Base  # noqa: E402
 from app.db.session import get_db  # noqa: E402
 from app.main import app, create_app  # noqa: E402
+from app.modules.auth.service import create_user_with_role  # noqa: E402
+from app.modules.users.models import RoleName, User  # noqa: E402
+from app.modules.users.service import seed_roles  # noqa: E402
 
 
 @pytest.fixture(scope="session")
@@ -96,6 +104,72 @@ def override_db(
         yield
     finally:
         app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.fixture()
+def seeded_roles(
+    test_session_factory: sessionmaker[Session],
+) -> None:
+    """Seed the three built-in roles into the isolated test database."""
+
+    with test_session_factory() as session:
+        seed_roles(session)
+
+
+@pytest.fixture()
+def user_factory(
+    test_session_factory: sessionmaker[Session],
+    seeded_roles: None,
+) -> Callable[..., User]:
+    """Create users directly through the trusted provisioning path."""
+
+    def _create(
+        *,
+        role: RoleName = RoleName.BUYER,
+        email: str | None = None,
+        password: str = TEST_PASSWORD,
+        full_name: str = "Test User",
+        phone: str | None = None,
+        is_active: bool = True,
+    ) -> User:
+        normalized_email = email or (
+            f"{role.value.lower()}-{uuid4().hex[:10]}@example.com"
+        )
+        with test_session_factory() as session:
+            return create_user_with_role(
+                session,
+                full_name=full_name,
+                email=normalized_email,
+                password=password,
+                phone=phone,
+                role_name=role,
+                is_active=is_active,
+            )
+
+    return _create
+
+
+@pytest.fixture()
+def auth_headers(
+    client: TestClient,
+    override_db: None,
+    seeded_roles: None,
+) -> Callable[..., dict[str, str]]:
+    """Log in a user and return a bearer authorization header."""
+
+    def _headers(
+        email: str,
+        password: str = TEST_PASSWORD,
+    ) -> dict[str, str]:
+        response = client.post(
+            "/api/v1/auth/login",
+            json={"email": email, "password": password},
+        )
+        assert response.status_code == 200, response.text
+        token = response.json()["access_token"]
+        return {"Authorization": f"Bearer {token}"}
+
+    return _headers
 
 
 @pytest.fixture()

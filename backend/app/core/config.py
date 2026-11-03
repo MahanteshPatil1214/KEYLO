@@ -14,6 +14,9 @@ Environment = Literal["development", "testing", "production"]
 
 _LOG_LEVELS = frozenset({"CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"})
 
+_JWT_SECRET_MIN_LENGTH = 32
+_JWT_PLACEHOLDER_MARKERS = ("change-me", "replace-me", "your-secret")
+
 _DEFAULT_CORS_ORIGINS = (
     "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -47,6 +50,14 @@ class Settings(BaseSettings):
         description="Explicit browser origins allowed to call the API.",
     )
     log_level: str = "INFO"
+    jwt_secret_key: SecretStr = Field(
+        ...,
+        description="Symmetric JWT signing secret. Required; never commit the real value.",
+    )
+    jwt_algorithm: Literal["HS256", "HS384", "HS512"] = "HS256"
+    jwt_issuer: str = "keylo-api"
+    jwt_audience: str = "keylo-clients"
+    access_token_expire_minutes: int = Field(default=30, ge=1, le=10080)
 
     @property
     def api_v1_prefix(self) -> str:
@@ -103,6 +114,24 @@ class Settings(BaseSettings):
             raise ValueError("DATABASE_URL must not be empty.")
         return SecretStr(url)
 
+    @field_validator("jwt_secret_key")
+    @classmethod
+    def _validate_jwt_secret_key(cls, value: SecretStr) -> SecretStr:
+        secret = value.get_secret_value().strip()
+        if len(secret) < _JWT_SECRET_MIN_LENGTH:
+            raise ValueError(
+                f"JWT_SECRET_KEY must be at least {_JWT_SECRET_MIN_LENGTH} characters."
+            )
+        return SecretStr(secret)
+
+    @field_validator("jwt_issuer", "jwt_audience")
+    @classmethod
+    def _validate_jwt_claim_value(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("JWT_ISSUER and JWT_AUDIENCE must not be empty.")
+        return normalized
+
     @model_validator(mode="after")
     def _validate_production_settings(self) -> Self:
         """Fail fast when production-critical configuration is unsafe."""
@@ -123,6 +152,11 @@ class Settings(BaseSettings):
             raise ValueError("Wildcard CORS origins are not allowed in production.")
         if not self.database_url.get_secret_value().startswith("postgresql"):
             raise ValueError("DATABASE_URL must use PostgreSQL in production.")
+        jwt_secret = self.jwt_secret_key.get_secret_value().lower()
+        if any(marker in jwt_secret for marker in _JWT_PLACEHOLDER_MARKERS):
+            raise ValueError(
+                "JWT_SECRET_KEY must not use a placeholder value in production."
+            )
         return self
 
 

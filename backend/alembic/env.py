@@ -15,6 +15,7 @@ from sqlalchemy import engine_from_config, pool
 
 from app.core.config import get_settings
 from app.db.base import Base
+from app.modules.users import models  # noqa: F401
 
 config = context.config
 
@@ -26,8 +27,8 @@ logger = logging.getLogger("alembic.env")
 settings = get_settings()
 target_metadata = Base.metadata
 
-# Import future model modules here so Alembic can autogenerate their tables.
-# Example: from app.modules.auth import models  # noqa: F401
+# Future model modules must be imported above so Alembic can autogenerate
+# their tables. Module 1 models are imported immediately after ``Base``.
 
 
 def _database_url() -> str:
