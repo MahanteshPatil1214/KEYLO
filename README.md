@@ -13,8 +13,8 @@ v2.
 ## Current status
 
 **Module 0 — Backend Foundation**, **Module 1 — Authentication & User
-Management**, **Module 2 — Projects & Fact Sheets**, and **Module 3 — Lead
-Management** are implemented.
+Management**, **Module 2 — Projects & Fact Sheets**, **Module 3 — Lead
+Management**, and **Module 4 — Conversations & Messages** are implemented.
 
 Module 0 provides the shared infrastructure:
 
@@ -65,7 +65,18 @@ Module 3 adds:
 - Contact consent enforcement: contact-requiring status transitions and executive assignment require `consent_to_contact: true`.
 - Executive assignment and re-assignment with assignment history preservation and database-enforced single active assignment partial unique index.
 
-Conversation, AI, booking, handoff, notification, and dashboard modules are not implemented yet.
+Module 4 adds:
+
+- UUID-based `conversations` and `messages` tables with an Alembic migration.
+- Strict ownership and role-based access isolation: Buyers access only their own threads; Sales Executives access conversations for assigned leads on active projects; Admins access all.
+- Conversation initiation endpoint (`POST /api/v1/conversations`) supporting optional initial messages and lead/project relationship verification.
+- Sender-type integrity enforcement: Buyers can only send as `BUYER`; Sales Executives can only send as `SALES_EXECUTIVE`; Non-admins cannot forge `ASSISTANT` or other sender roles.
+- Safe message posting with non-empty content validation and strict rejection of writes to `CLOSED` or `ARCHIVED` threads.
+- Paginated message history retrieval (`GET /api/v1/conversations/{id}/messages`) with chronological (`asc`) and reverse (`desc`) ordering.
+- Direct message lookup endpoint (`GET /api/v1/messages/{message_id}`) with conversation visibility checks.
+- Conversation lifecycle status management (`ACTIVE`, `CLOSED`, `ARCHIVED`), restricting archive capability to administrators.
+
+AI provider (Groq), external messaging (WhatsApp/SMS), booking, handoff workflows, notification, and dashboard modules are not implemented yet.
 
 ## Technology stack
 
@@ -112,6 +123,27 @@ KEYLO/
 │   │   │   │   ├── schemas.py
 │   │   │   │   └── exceptions.py
 │   │   │   └── projects/
+│   │   │       ├── router.py
+│   │   │       ├── service.py
+│   │   │       ├── repository.py
+│   │   │       ├── models.py
+│   │   │       ├── schemas.py
+│   │   │       └── exceptions.py
+│   │   │   ├── leads/
+│   │   │   │   ├── router.py
+│   │   │   │   ├── service.py
+│   │   │   │   ├── repository.py
+│   │   │   │   ├── models.py
+│   │   │   │   ├── schemas.py
+│   │   │   │   └── exceptions.py
+│   │   │   ├── conversations/
+│   │   │   │   ├── router.py
+│   │   │   │   ├── service.py
+│   │   │   │   ├── repository.py
+│   │   │   │   ├── models.py
+│   │   │   │   ├── schemas.py
+│   │   │   │   └── exceptions.py
+│   │   │   └── messages/
 │   │   │       ├── router.py
 │   │   │       ├── service.py
 │   │   │       ├── repository.py
@@ -449,6 +481,13 @@ There is no public admin registration endpoint.
 | `PATCH` | `/api/v1/leads/{lead_id}/status` | Admin or assigned Sales Exec | Lifecycle status transition |
 | `POST` | `/api/v1/leads/{lead_id}/assign` | Admin | Assign or reassign to an active sales executive |
 | `GET` | `/api/v1/leads/{lead_id}/assignments` | Admin or assigned Sales Exec | Paginated assignment history |
+| `POST` | `/api/v1/conversations` | Authenticated | Create a conversation (with optional initial message) |
+| `GET` | `/api/v1/conversations` | Authenticated | Paginated conversations listing with project, lead, and status filters |
+| `GET` | `/api/v1/conversations/{conversation_id}` | Authenticated | Conversation detail (role-isolated) |
+| `PATCH` | `/api/v1/conversations/{conversation_id}/status` | Authenticated | Update conversation status (Admin required for ARCHIVED) |
+| `POST` | `/api/v1/conversations/{conversation_id}/messages` | Authenticated | Send a message to an active conversation |
+| `GET` | `/api/v1/conversations/{conversation_id}/messages` | Authenticated | Paginated message history (asc/desc order) |
+| `GET` | `/api/v1/messages/{message_id}` | Authenticated | Retrieve an individual message (role-isolated) |
 | `GET` | `/docs` | Public | Swagger UI |
 
 ### Example registration
@@ -795,6 +834,67 @@ Invoke-RestMethod -Method Post `
   -Headers $adminHeaders `
   -ContentType application/json `
   -Body (@{ executive_id = "$($executive.id)" } | ConvertTo-Json)
+```
+
+## Conversations and messages
+
+Module 4 implements interactive conversation threads and message exchange
+between buyers, sales executives, and future AI assistants.
+
+### Conversation lifecycle
+
+- `ACTIVE`: The conversation is ongoing; authorized participants can post messages.
+- `CLOSED`: The conversation is completed; posting is blocked. Participants can close active threads.
+- `ARCHIVED`: Retained thread; only administrators can move a conversation to `ARCHIVED`.
+
+### Message sender types
+
+- `BUYER`: Messages sent by registered buyers.
+- `ASSISTANT`: Reserved for future AI assistant responses.
+- `SALES_EXECUTIVE`: Messages sent by assigned sales executives.
+- `SYSTEM`: Administrative updates or platform notifications.
+
+### Access control rules
+
+- **BUYER**: Accesses only their own conversations and messages. Can only post messages with `BUYER` sender type. Attempting to start a thread for a lead registered under another email is forbidden (`403`).
+- **SALES_EXECUTIVE**: Accesses conversations and messages only for leads currently assigned to them on active projects. Can only post as `SALES_EXECUTIVE`.
+- **ADMIN**: Accesses all conversations and messages, can post as `SYSTEM` or `SALES_EXECUTIVE`, and archive conversations.
+- **Privacy & Safety**: Requests for conversations or messages not accessible to the caller return `404 Not Found` rather than `403 Forbidden` to prevent revealing the existence of other users' conversations.
+- **Validation**: Empty or whitespace-only messages are rejected (`422`). Posting to `CLOSED` or `ARCHIVED` threads is rejected (`400`).
+
+### Example conversation and messaging flow
+
+```powershell
+$headers = @{ Authorization = "Bearer $($tokenResponse.access_token)" }
+
+# 1. Start conversation for an existing lead
+$convBody = @{
+  lead_id = "$($lead.id)"
+  project_id = "$($project.id)"
+  initial_message = "Hi, does this project have a swimming pool and clubhouse?"
+} | ConvertTo-Json
+
+$conv = Invoke-RestMethod -Method Post `
+  -Uri http://127.0.0.1:8000/api/v1/conversations `
+  -Headers $headers `
+  -ContentType application/json `
+  -Body $convBody
+
+# 2. Reply to the conversation
+$replyBody = @{
+  content = "Yes, both a heated pool and a clubhouse are included in the amenities."
+} | ConvertTo-Json
+
+$reply = Invoke-RestMethod -Method Post `
+  -Uri "http://127.0.0.1:8000/api/v1/conversations/$($conv.id)/messages" `
+  -Headers $headers `
+  -ContentType application/json `
+  -Body $replyBody
+
+# 3. Retrieve conversation history
+$messages = Invoke-RestMethod `
+  -Uri "http://127.0.0.1:8000/api/v1/conversations/$($conv.id)/messages?order=asc&page=1&page_size=50" `
+  -Headers $headers
 ```
 
 ## Health endpoints
