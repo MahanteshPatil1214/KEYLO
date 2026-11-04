@@ -14,7 +14,7 @@ v2.
 
 **Module 0 — Backend Foundation**, **Module 1 — Authentication & User
 Management**, **Module 2 — Projects & Fact Sheets**, **Module 3 — Lead
-Management**, **Module 4 — Conversations & Messages**, **Module 5 — AI Assistant with Groq**, **Module 6 — Availability & Site Visit Booking**, and **Module 7 — Human Handoff** are implemented.
+Management**, **Module 4 — Conversations & Messages**, **Module 5 — AI Assistant with Groq**, **Module 6 — Availability & Site Visit Booking**, **Module 7 — Human Handoff**, and **Module 8 — Notifications & Reminders** are implemented.
 
 Module 0 provides the shared infrastructure:
 
@@ -110,6 +110,22 @@ Module 7 adds:
 - Role-based handoff visibility isolation: Sales executives view and manage only handoffs assigned to them; buyers view handoffs for their conversations; admins view all.
 - Strictly factual conversation summaries compiled for the sales executive without hallucination.
 - Complete lifecycle status management (`PENDING`, `ASSIGNED`, `IN_PROGRESS`, `RESOLVED`, `CANCELLED`) with resolution notes tracking.
+
+Module 8 adds:
+
+- UUID-based `notifications` table with an Alembic migration (`3df128151593`).
+- In-app notification creation dispatched from core domain events:
+  - New lead assignment to sales executives (`LEAD_ASSIGNED`).
+  - New handoff escalation assigned to sales executives (`HANDOFF_ASSIGNED`).
+  - Handoff status resolution updates delivered to buyer/creator (`HANDOFF_STATUS_UPDATED`).
+  - Site-visit booking confirmations delivered to buyer and assigned executive (`BOOKING_CONFIRMED`).
+  - Site-visit booking cancellations delivered to buyer and assigned executive (`BOOKING_CANCELLED`).
+- Automated site-visit reminder engine processing scheduled bookings at **24 hours and 2 hours** prior to visit start time.
+- Resilient background worker loop (`ReminderScheduler`) surviving application restarts and configured via environment settings.
+- Robust database idempotency constraint (`uq_notifications_idempotency_key`) preventing duplicate notifications across rapid polling runs and restarts.
+- Mandatory buyer consent validation (`lead.consent_to_contact: true`) ensuring opt-outs are strictly respected.
+- User notification management endpoints: paginated listing (`GET /api/v1/notifications`), unread count (`GET /api/v1/notifications/unread-count`), single read (`PATCH /api/v1/notifications/{id}/read`), and bulk read (`POST /api/v1/notifications/mark-all-read`).
+- Administrative reminder scan trigger endpoint (`POST /api/v1/notifications/reminders/trigger`) with strict role-based access control.
 
 External messaging (WhatsApp/SMS), calendar integrations (Google Calendar/Outlook), payment collection, external notification services, and dashboard modules are not implemented yet.
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -52,6 +53,8 @@ from app.modules.projects.repository import get_project_by_id
 from app.modules.users import repository as users_repository
 from app.modules.users.exceptions import InsufficientPermissionsError
 from app.modules.users.models import RoleName, User
+
+logger = logging.getLogger(__name__)
 
 
 def _is_admin(user: User) -> bool:
@@ -430,6 +433,14 @@ def create_booking(
         updated_at=now,
     )
     session.add(booking)
+    session.flush()
+
+    try:
+        from app.modules.notifications.service import notify_booking_confirmed
+
+        notify_booking_confirmed(session, booking=booking)
+    except Exception as exc:
+        logger.warning("Could not dispatch booking confirmed notification: %s", exc)
 
     # Transition lead status to VISIT_BOOKED if applicable
     if lead.status in (
@@ -557,6 +568,13 @@ def cancel_booking(
         booking.lead.status = LeadStatus.VISIT_CANCELLED.value
         booking.lead.updated_at = now
 
+    try:
+        from app.modules.notifications.service import notify_booking_cancelled
+
+        notify_booking_cancelled(session, booking=booking)
+    except Exception as exc:
+        logger.warning("Could not dispatch booking cancelled notification: %s", exc)
+
     session.commit()
     refreshed = repository.get_booking_by_id(session, booking.id)
     assert refreshed is not None
@@ -601,6 +619,12 @@ def update_booking_status(
     if requested == BookingStatus.CANCELLED:
         booking.cancelled_at = now
         booking.cancelled_by_id = actor.id
+        try:
+            from app.modules.notifications.service import notify_booking_cancelled
+
+            notify_booking_cancelled(session, booking=booking)
+        except Exception as exc:
+            logger.warning("Could not dispatch booking cancelled notification: %s", exc)
 
     # If visit took place, transition lead status to VISITED
     if requested == BookingStatus.COMPLETED:

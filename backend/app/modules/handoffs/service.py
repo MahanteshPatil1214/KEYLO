@@ -396,6 +396,13 @@ def assign_handoff(
         content=f"Sales executive {target_exec.full_name} has been assigned to your inquiry.",
     )
 
+    try:
+        from app.modules.notifications.service import notify_handoff_assigned
+
+        notify_handoff_assigned(session, handoff=handoff, executive=target_exec)
+    except Exception as exc:
+        logger.warning("Could not dispatch handoff assignment notification: %s", exc)
+
     session.commit()
     refreshed = repository.get_handoff_by_id(session, handoff.id)
     assert refreshed is not None
@@ -436,6 +443,13 @@ def update_handoff_status(
     if payload.status in (HandoffStatus.RESOLVED, HandoffStatus.CANCELLED):
         handoff.resolved_at = now
         handoff.resolved_by_id = actor.id
+
+    try:
+        from app.modules.notifications.service import notify_handoff_status_updated
+
+        notify_handoff_status_updated(session, handoff=handoff, actor=actor)
+    except Exception as exc:
+        logger.warning("Could not dispatch handoff status notification: %s", exc)
 
     session.commit()
     refreshed = repository.get_handoff_by_id(session, handoff.id)

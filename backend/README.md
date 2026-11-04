@@ -228,6 +228,12 @@ after restarting with another `.env`. Tokens also expire after
 | `GET` | `/api/v1/handoffs/{handoff_id}` | Authenticated | Retrieve handoff details (role-isolated) |
 | `POST` | `/api/v1/handoffs/{handoff_id}/assign` | Admin | Assign or reassign sales executive to handoff |
 | `PATCH` | `/api/v1/handoffs/{handoff_id}/status` | Admin / Assigned Sales Exec | Update handoff status and resolution notes |
+| `GET` | `/api/v1/notifications` | Authenticated | Paginated notifications listing with read status and type filters (role-isolated) |
+| `GET` | `/api/v1/notifications/unread-count` | Authenticated | Summary of unread notifications for current user |
+| `GET` | `/api/v1/notifications/{notification_id}` | Authenticated | Retrieve notification details (role-isolated) |
+| `PATCH` | `/api/v1/notifications/{notification_id}/read` | Authenticated | Mark a single notification as read |
+| `POST` | `/api/v1/notifications/mark-all-read` | Authenticated | Mark all unread notifications as read for current user |
+| `POST` | `/api/v1/notifications/reminders/trigger` | Admin | Manually trigger due reminder scan |
 | `GET` | `/docs` | Public | Swagger UI |
 
 Example registration:
@@ -608,6 +614,68 @@ Invoke-RestMethod -Method Patch `
   -Body $resolveBody
 ```
 
+### Notifications & Reminders (Module 8)
+
+Keylo provides in-app notifications generated from domain events (lead assignment, handoff escalation and resolution, site visit booking confirmation and cancellation) alongside automated background reminders dispatched at **24 hours and 2 hours** prior to scheduled site visits. Duplicate deliveries are strictly prevented through database idempotency constraints (`uq_notifications_idempotency_key`), and buyer contact opt-out consents are honored.
+
+Example checking notifications and unread count:
+
+```powershell
+# 1. Check unread count
+$unread = Invoke-RestMethod -Method Get `
+  -Uri "http://127.0.0.1:8000/api/v1/notifications/unread-count" `
+  -Headers $buyerHeaders
+
+Write-Host "Unread notifications: $($unread.unread_count)"
+
+# 2. List unread notifications
+$notifications = Invoke-RestMethod -Method Get `
+  -Uri "http://127.0.0.1:8000/api/v1/notifications?is_read=false&page=1&page_size=10" `
+  -Headers $buyerHeaders
+
+# 3. Mark single notification as read
+$firstNotifId = $notifications.items[0].id
+Invoke-RestMethod -Method Patch `
+  -Uri "http://127.0.0.1:8000/api/v1/notifications/$firstNotifId/read" `
+  -Headers $buyerHeaders
+
+# 4. Mark all remaining notifications as read
+Invoke-RestMethod -Method Post `
+  -Uri "http://127.0.0.1:8000/api/v1/notifications/mark-all-read" `
+  -Headers $buyerHeaders
+```
+
+### Notifications & Reminders (Module 8)
+
+Keylo provides in-app notifications generated from domain events (lead assignment, handoff escalation and resolution, site visit booking confirmation and cancellation) alongside automated background reminders dispatched at **24 hours and 2 hours** prior to scheduled site visits. Duplicate deliveries are strictly prevented through database idempotency constraints (`uq_notifications_idempotency_key`), and buyer contact opt-out consents are honored.
+
+Example checking notifications and unread count:
+
+```powershell
+# 1. Check unread count
+$unread = Invoke-RestMethod -Method Get `
+  -Uri "http://127.0.0.1:8000/api/v1/notifications/unread-count" `
+  -Headers $buyerHeaders
+
+Write-Host "Unread notifications: $($unread.unread_count)"
+
+# 2. List unread notifications
+$notifications = Invoke-RestMethod -Method Get `
+  -Uri "http://127.0.0.1:8000/api/v1/notifications?is_read=false&page=1&page_size=10" `
+  -Headers $buyerHeaders
+
+# 3. Mark single notification as read
+$firstNotifId = $notifications.items[0].id
+Invoke-RestMethod -Method Patch `
+  -Uri "http://127.0.0.1:8000/api/v1/notifications/$firstNotifId/read" `
+  -Headers $buyerHeaders
+
+# 4. Mark all remaining notifications as read
+Invoke-RestMethod -Method Post `
+  -Uri "http://127.0.0.1:8000/api/v1/notifications/mark-all-read" `
+  -Headers $buyerHeaders
+```
+
 ## Tests
 
 ```powershell
@@ -631,6 +699,8 @@ pytest tests/unit/test_ai_assistant_unit.py
 pytest tests/integration/test_ai_assistant.py
 pytest tests/integration/test_bookings.py
 pytest tests/integration/test_handoffs.py
+pytest tests/integration/test_notifications.py
+pytest tests/integration/test_notifications.py
 ```
 
 The suite forces testing configuration before importing the app, uses a fresh
@@ -658,7 +728,8 @@ app/
     ├── messages/           Message models, repository, direct queries
     ├── ai_assistant/       Groq client adapter, prompts, AI chat service
     ├── bookings/           Visit slots, availability, site visit booking
-    └── handoffs/           Human escalation, executive assignment, summaries
+    ├── handoffs/           Human escalation, executive assignment, summaries
+    └── notifications/      In-app alerts, visit reminders, idempotency, scheduler
 alembic/                    Migration environment and versions
 scripts/                    Role seeding and first-admin provisioning
 tests/                      Unit and integration tests

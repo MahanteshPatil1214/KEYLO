@@ -19,6 +19,7 @@ from app.modules.bookings import models as bookings_models  # noqa: F401
 from app.modules.conversations import models as conversations_models  # noqa: F401
 from app.modules.handoffs import models as handoffs_models  # noqa: F401
 from app.modules.leads import models as leads_models  # noqa: F401
+from app.modules.notifications import models as notifications_models  # noqa: F401
 from app.modules.projects import models as projects_models  # noqa: F401
 from app.modules.users import models  # noqa: F401
 
@@ -33,8 +34,8 @@ settings = get_settings()
 target_metadata = Base.metadata
 
 # Future model modules must be imported above so Alembic can autogenerate
-# their tables. Module 1, Module 2, Module 3, Module 4, Module 6, and Module 7
-# models are imported immediately after ``Base``.
+# their tables. Module 1, Module 2, Module 3, Module 4, Module 6, Module 7,
+# and Module 8 models are imported immediately after ``Base``.
 
 
 def _database_url() -> str:

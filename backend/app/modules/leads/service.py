@@ -563,6 +563,13 @@ def assign_lead(
     lead.updated_at = now
 
     try:
+        from app.modules.notifications.service import notify_lead_assigned
+
+        notify_lead_assigned(session, lead=lead, executive=executive)
+    except Exception as exc:
+        logger.warning("Could not dispatch lead assignment notification: %s", exc)
+
+    try:
         session.commit()
     except IntegrityError:
         session.rollback()

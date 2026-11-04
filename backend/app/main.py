@@ -46,8 +46,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app_settings.api_version,
             app_settings.debug,
         )
+        if (
+            getattr(app_settings, "reminder_scheduler_enabled", True)
+            and app_settings.environment not in ("test", "testing")
+        ):
+            from app.modules.notifications.scheduler import reminder_scheduler
+
+            reminder_scheduler.start()
+
         yield
+
         logger.info("Shutting down %s", app_settings.app_name)
+        if (
+            getattr(app_settings, "reminder_scheduler_enabled", True)
+            and app_settings.environment not in ("test", "testing")
+        ):
+            from app.modules.notifications.scheduler import reminder_scheduler
+
+            await reminder_scheduler.stop()
+
         dispose_engine()
 
     application = FastAPI(

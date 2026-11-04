@@ -91,6 +91,16 @@ class Settings(BaseSettings):
         le=2.0,
         description="Sampling temperature for assistant chat completions.",
     )
+    reminder_scheduler_enabled: bool = Field(
+        default=True,
+        description="Whether the background reminder scheduler task should run.",
+    )
+    reminder_poll_interval_seconds: int = Field(
+        default=60,
+        ge=1,
+        le=3600,
+        description="Interval in seconds between reminder scheduler checks.",
+    )
 
     @property
     def api_v1_prefix(self) -> str:
