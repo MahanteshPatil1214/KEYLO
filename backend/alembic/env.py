@@ -17,6 +17,7 @@ from app.core.config import get_settings
 from app.db.base import Base
 from app.modules.bookings import models as bookings_models  # noqa: F401
 from app.modules.conversations import models as conversations_models  # noqa: F401
+from app.modules.handoffs import models as handoffs_models  # noqa: F401
 from app.modules.leads import models as leads_models  # noqa: F401
 from app.modules.projects import models as projects_models  # noqa: F401
 from app.modules.users import models  # noqa: F401
@@ -32,8 +33,8 @@ settings = get_settings()
 target_metadata = Base.metadata
 
 # Future model modules must be imported above so Alembic can autogenerate
-# their tables. Module 1, Module 2, Module 3, and Module 4 models are imported
-# immediately after ``Base``.
+# their tables. Module 1, Module 2, Module 3, Module 4, Module 6, and Module 7
+# models are imported immediately after ``Base``.
 
 
 def _database_url() -> str:
@@ -48,8 +49,6 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        compare_type=True,
-        compare_server_default=True,
     )
 
     with context.begin_transaction():
@@ -57,9 +56,9 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    """Run migrations against a live database connection."""
+    """Run migrations against the live database engine."""
 
-    configuration = config.get_section(config.config_ini_section, {})
+    configuration = config.get_section(config.config_ini_section) or {}
     configuration["sqlalchemy.url"] = _database_url()
 
     connectable = engine_from_config(
@@ -73,7 +72,6 @@ def run_migrations_online() -> None:
             connection=connection,
             target_metadata=target_metadata,
             compare_type=True,
-            compare_server_default=True,
         )
 
         with context.begin_transaction():

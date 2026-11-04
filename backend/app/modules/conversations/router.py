@@ -165,3 +165,22 @@ def list_messages_endpoint(
         order=order,
     )
 
+
+
+@router.post(
+    "/{conversation_id}/handoff",
+    status_code=status.HTTP_201_CREATED,
+    tags=["Handoffs"],
+    summary="Request a human handoff for this conversation",
+)
+def request_conversation_handoff_endpoint(
+    conversation_id: UUID,
+    current_user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Escalate this conversation to a human sales executive."""
+    from app.modules.handoffs.schemas import HandoffCreateRequest, HandoffResponse
+    from app.modules.handoffs.service import request_handoff
+
+    payload = HandoffCreateRequest(conversation_id=conversation_id)
+    return request_handoff(db, actor=current_user, payload=payload)

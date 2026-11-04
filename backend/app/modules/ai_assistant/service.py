@@ -155,6 +155,50 @@ def chat(
         content=assistant_reply_text,
     )
 
+    # 7. Check if human handoff should be flagged automatically
+    from app.modules.handoffs.models import HandoffReason
+    from app.modules.handoffs.service import create_auto_handoff
+
+    handoff_reason: HandoffReason | None = None
+    if not client.is_configured or assistant_reply_text == FALLBACK_ASSISTANT_REPLY:
+        handoff_reason = HandoffReason.AI_FALLBACK
+    elif any(
+        term in cleaned_message.lower()
+        for term in (
+            "human",
+            "executive",
+            "representative",
+            "agent",
+            "call me",
+            "speak to",
+            "talk to",
+            "contact me",
+        )
+    ):
+        handoff_reason = HandoffReason.BUYER_REQUESTED
+    elif not approved_facts or any(
+        phrase in assistant_reply_text.lower()
+        for phrase in (
+            "sales executive will confirm",
+            "sales executive will connect",
+            "not in the verified project fact sheet",
+            "currently unavailable",
+            "not available",
+        )
+    ):
+        handoff_reason = HandoffReason.FACT_UNAVAILABLE
+
+    if handoff_reason is not None:
+        try:
+            create_auto_handoff(
+                session,
+                conversation_id=conversation.id,
+                reason=handoff_reason,
+                notify_conversation=False,
+            )
+        except Exception as exc:
+            logger.warning("Could not auto-flag handoff: %s", exc)
+
     return ChatResponse(
         conversation_id=conversation.id,
         buyer_message=buyer_message,

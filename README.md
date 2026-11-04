@@ -14,7 +14,7 @@ v2.
 
 **Module 0 — Backend Foundation**, **Module 1 — Authentication & User
 Management**, **Module 2 — Projects & Fact Sheets**, **Module 3 — Lead
-Management**, **Module 4 — Conversations & Messages**, **Module 5 — AI Assistant with Groq**, and **Module 6 — Availability & Site Visit Booking** are implemented.
+Management**, **Module 4 — Conversations & Messages**, **Module 5 — AI Assistant with Groq**, **Module 6 — Availability & Site Visit Booking**, and **Module 7 — Human Handoff** are implemented.
 
 Module 0 provides the shared infrastructure:
 
@@ -99,7 +99,19 @@ Module 6 adds:
 - Strict role-based booking visibility: Buyers view only their own bookings; Sales Executives view bookings only for assigned leads on active projects; Admins view all.
 - Visit outcome status management (`PATCH /api/v1/bookings/{id}/status`) restricted to Admins and assigned Sales Executives (`COMPLETED`, `NO_SHOW`).
 
-External messaging (WhatsApp/SMS), calendar integrations (Google Calendar/Outlook), payment collection, handoff workflows, notification, and dashboard modules are not implemented yet.
+Module 7 adds:
+
+- UUID-based `handoffs` table with an Alembic migration (`77a9d0f475be`).
+- Buyer-initiated escalation endpoints (`POST /api/v1/handoffs` and `POST /api/v1/conversations/{id}/handoff`).
+- Automatic conversation flagging by the AI assistant when verified facts are unavailable or fallback responses are triggered.
+- Duplicate active handoff prevention at the database level (`uq_handoffs_conversation_active`) and service layer (HTTP `409 Conflict`).
+- Automated `SYSTEM` message notifications in the conversation thread via Module 4.
+- Admin executive assignment and reassignment endpoint (`POST /api/v1/handoffs/{id}/assign`) restricted to active sales executives.
+- Role-based handoff visibility isolation: Sales executives view and manage only handoffs assigned to them; buyers view handoffs for their conversations; admins view all.
+- Strictly factual conversation summaries compiled for the sales executive without hallucination.
+- Complete lifecycle status management (`PENDING`, `ASSIGNED`, `IN_PROGRESS`, `RESOLVED`, `CANCELLED`) with resolution notes tracking.
+
+External messaging (WhatsApp/SMS), calendar integrations (Google Calendar/Outlook), payment collection, external notification services, and dashboard modules are not implemented yet.
 
 ## Technology stack
 

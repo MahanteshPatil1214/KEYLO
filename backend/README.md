@@ -33,6 +33,12 @@ This directory currently implements:
   prevention, consent-to-contact enforcement, self-service cancellation with
   immediate capacity release, lead status synchronization, and role-isolated
   booking visibility (`PENDING`, `CONFIRMED`, `CANCELLED`, `COMPLETED`, `NO_SHOW`).
+- **Module 7: Human Handoff** — buyer-initiated escalation, automatic conversation
+  flagging when AI cannot answer using approved facts, handoff records linked
+  to conversation, lead, and sales executive, admin executive assignment,
+  role-isolated handoff visibility, factual conversation summaries, duplicate
+  active handoff prevention (`uq_handoffs_conversation_active`), SYSTEM notification
+  messages via Module 4, and resolution tracking (`PENDING`, `ASSIGNED`, `IN_PROGRESS`, `RESOLVED`, `CANCELLED`).
 
 See the [repository README](../README.md) for the full project overview,
 architecture, API examples, and security notes.
@@ -216,6 +222,12 @@ after restarting with another `.env`. Tokens also expire after
 | `GET` | `/api/v1/bookings/{booking_id}` | Authenticated | Booking details (role-isolated) |
 | `POST` | `/api/v1/bookings/{booking_id}/cancel` | Buyer / Admin | Cancel a booking and release capacity |
 | `PATCH` | `/api/v1/bookings/{booking_id}/status` | Admin / Assigned Sales Exec | Update visit outcome status (COMPLETED, NO_SHOW) |
+| `POST` | `/api/v1/handoffs` | Buyer / Staff | Request or create a human handoff |
+| `POST` | `/api/v1/conversations/{conversation_id}/handoff` | Buyer / Staff | Escalate a conversation to human executive |
+| `GET` | `/api/v1/handoffs` | Authenticated | Paginated handoffs listing with filters (role-isolated) |
+| `GET` | `/api/v1/handoffs/{handoff_id}` | Authenticated | Retrieve handoff details (role-isolated) |
+| `POST` | `/api/v1/handoffs/{handoff_id}/assign` | Admin | Assign or reassign sales executive to handoff |
+| `PATCH` | `/api/v1/handoffs/{handoff_id}/status` | Admin / Assigned Sales Exec | Update handoff status and resolution notes |
 | `GET` | `/docs` | Public | Swagger UI |
 
 Example registration:
@@ -527,6 +539,75 @@ Invoke-RestMethod -Method Patch `
   -Body (@{ status = "COMPLETED"; notes = "Buyer toured sample flat." } | ConvertTo-Json)
 ```
 
+## Human handoff
+
+Module 7 implements human escalation when buyers request a human representative or when the AI assistant cannot answer questions using approved project facts.
+
+### Lifecycle & triggers
+- **Status lifecycle**: `PENDING` -> `ASSIGNED` -> `IN_PROGRESS` -> `RESOLVED` / `CANCELLED`.
+- **Triggers**:
+  - **Buyer requested**: Buyers can escalate at any time via `POST /api/v1/handoffs` or `POST /api/v1/conversations/{id}/handoff`.
+  - **Auto-flagged by AI**: The AI chat service automatically flags conversations and creates a handoff when verified facts are unavailable or when fallback responses occur.
+- **Duplicate prevention**: A database partial unique index (`uq_handoffs_conversation_active`) and transactional check guarantee that only one active handoff (`PENDING`, `ASSIGNED`, `IN_PROGRESS`) can exist per conversation. Attempting to create a duplicate active handoff returns HTTP `409 Conflict`.
+- **Factual summary generation**: Automatically compiles a concise, 100% factual summary of recent buyer inquiries and dialogue context for the executive without extrapolating or inventing facts.
+- **Conversation notification**: Whenever a handoff is requested or assigned, an automated `SYSTEM` message is posted to the conversation thread using Module 4, informing the buyer that a sales executive has been notified.
+
+### Access control & role isolation
+- **BUYER**: Can request handoffs for their own active conversations; can view only their own handoffs.
+- **SALES_EXECUTIVE**: Can view and manage only handoffs assigned directly to them (`executive_id == current_user.id`) on active projects.
+- **ADMIN**: Can view all handoffs, filter by executive/project/status, and assign or reassign handoffs to active sales executives.
+
+### Example handoff workflow (PowerShell)
+
+```powershell
+$headers = @{ Authorization = "Bearer $($buyerToken.access_token)" }
+
+# 1. Buyer requests a human sales executive
+$body = @{
+  conversation_id = "$($conversation.id)"
+  reason = "BUYER_REQUESTED"
+  notes = "Buyer requested consultation regarding custom payment schedules."
+} | ConvertTo-Json
+
+$handoff = Invoke-RestMethod -Method Post `
+  -Uri http://127.0.0.1:8000/api/v1/handoffs `
+  -Headers $headers `
+  -ContentType application/json `
+  -Body $body
+
+# 2. Admin assigns handoff to a sales executive
+$adminHeaders = @{ Authorization = "Bearer $($adminToken.access_token)" }
+$assignBody = @{
+  executive_id = "$($execUser.id)"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method Post `
+  -Uri "http://127.0.0.1:8000/api/v1/handoffs/$($handoff.id)/assign" `
+  -Headers $adminHeaders `
+  -ContentType application/json `
+  -Body $assignBody
+
+# 3. Assigned sales executive marks handoff IN_PROGRESS
+$execHeaders = @{ Authorization = "Bearer $($execToken.access_token)" }
+Invoke-RestMethod -Method Patch `
+  -Uri "http://127.0.0.1:8000/api/v1/handoffs/$($handoff.id)/status" `
+  -Headers $execHeaders `
+  -ContentType application/json `
+  -Body (@{ status = "IN_PROGRESS" } | ConvertTo-Json)
+
+# 4. Sales executive resolves handoff with resolution notes
+$resolveBody = @{
+  status = "RESOLVED"
+  resolution_notes = "Called buyer and answered payment plan details; scheduled site visit."
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method Patch `
+  -Uri "http://127.0.0.1:8000/api/v1/handoffs/$($handoff.id)/status" `
+  -Headers $execHeaders `
+  -ContentType application/json `
+  -Body $resolveBody
+```
+
 ## Tests
 
 ```powershell
@@ -549,6 +630,7 @@ pytest tests/integration/test_conversations.py
 pytest tests/unit/test_ai_assistant_unit.py
 pytest tests/integration/test_ai_assistant.py
 pytest tests/integration/test_bookings.py
+pytest tests/integration/test_handoffs.py
 ```
 
 The suite forces testing configuration before importing the app, uses a fresh
@@ -575,7 +657,8 @@ app/
     ├── conversations/      Dialogue threads, lifecycle, access control
     ├── messages/           Message models, repository, direct queries
     ├── ai_assistant/       Groq client adapter, prompts, AI chat service
-    └── bookings/           Visit slots, availability, site visit booking
+    ├── bookings/           Visit slots, availability, site visit booking
+    └── handoffs/           Human escalation, executive assignment, summaries
 alembic/                    Migration environment and versions
 scripts/                    Role seeding and first-admin provisioning
 tests/                      Unit and integration tests
@@ -597,9 +680,9 @@ docker-compose.yml          PostgreSQL 16 with a persistent volume
 - Fact categories are free-form uppercase labels until an agreed allowlist is
   introduced.
 - No external calendar integration (Google Calendar/Outlook), payment collection,
-  human handoff workflow, external messaging (WhatsApp/SMS), notification, or
+  external messaging (WhatsApp/SMS), external notification service, or
   dashboard module is implemented yet; approved-facts, lead-management,
-  conversation, AI Assistant, and booking boundaries exist.
+  conversation, AI Assistant, booking, and human handoff boundaries exist.
 - Synchronous database access by design.
 - Docker Compose provides PostgreSQL only; the API runs under Uvicorn.
 - Tests use SQLite; PostgreSQL connectivity and migrations are verified manually.
