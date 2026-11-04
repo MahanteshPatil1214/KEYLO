@@ -45,7 +45,7 @@ def get_slot_by_id(
     )
     if for_update:
         # In SQLite, with_for_update is ignored; in PostgreSQL, locks the slot row
-        statement = statement.with_for_update()
+        statement = statement.with_for_update(of=VisitSlot)
     return session.scalar(statement)
 
 
@@ -190,7 +190,7 @@ def get_booking_by_id(
         .where(Booking.id == booking_id)
     )
     if for_update:
-        statement = statement.with_for_update()
+        statement = statement.with_for_update(of=Booking)
     return session.scalar(statement)
 
 

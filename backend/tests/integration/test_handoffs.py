@@ -372,12 +372,21 @@ def test_buyer_nested_conversation_handoff_route(
     assert body["status"] == HandoffStatus.PENDING.value
 
 
+@pytest.mark.parametrize(
+    "unavailable_reply",
+    [
+        "This information is currently not in the verified project fact sheet and a sales executive will confirm.",
+        "Those details are not included in the verified project fact sheet. A sales executive can provide them.",
+        "The approved project information does not include those details. A sales executive will be able to provide them.",
+    ],
+)
 def test_ai_assistant_auto_flags_conversation_when_facts_unavailable(
     client: TestClient,
     override_db: None,
     admin_headers: dict[str, str],
     buyer_headers: dict[str, str],
     active_conversation: dict[str, Any],
+    unavailable_reply: str,
 ) -> None:
     """When AI fallback is triggered, conversation is automatically flagged for handoff."""
 
@@ -389,7 +398,7 @@ def test_ai_assistant_auto_flags_conversation_when_facts_unavailable(
             )
 
         def generate_chat_completion(self, **kwargs: Any) -> str:
-            return "This information is currently not in the verified project fact sheet and a sales executive will confirm."
+            return unavailable_reply
 
     mock_client = MockUnavailableGroq()
     app.dependency_overrides[get_assistant_client] = lambda: mock_client

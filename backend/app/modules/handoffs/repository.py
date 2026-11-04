@@ -45,7 +45,7 @@ def get_handoff_by_id(
         .where(Handoff.id == handoff_id)
     )
     if for_update:
-        statement = statement.with_for_update()
+        statement = statement.with_for_update(of=Handoff)
     return session.scalar(statement)
 
 
@@ -71,7 +71,7 @@ def get_active_handoff_by_conversation(
         )
     )
     if for_update:
-        statement = statement.with_for_update()
+        statement = statement.with_for_update(of=Handoff)
     return session.scalar(statement)
 
 

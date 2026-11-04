@@ -37,6 +37,43 @@ from app.modules.users.models import RoleName, User
 
 logger = logging.getLogger("keylo.ai_assistant.service")
 
+_FACT_CONTEXT_MARKERS = (
+    "project fact sheet",
+    "approved project information",
+    "approved project facts",
+    "provided project information",
+)
+_FACT_UNAVAILABLE_MARKERS = (
+    "not in ",
+    "not included",
+    "not part of",
+    "not available",
+    "does not include",
+    "does not contain",
+    "do not include",
+    "do not contain",
+)
+_EXECUTIVE_ESCALATION_MARKERS = (
+    "sales executive will confirm",
+    "sales executive will connect",
+    "sales executive can provide",
+    "sales executive will be able to provide",
+    "sales team will be able to provide",
+    "currently unavailable",
+)
+
+
+def _indicates_fact_unavailable(reply: str) -> bool:
+    """Detect paraphrased fact-unavailable answers without relying on one exact phrase."""
+
+    lowered = reply.lower()
+    has_fact_context = any(marker in lowered for marker in _FACT_CONTEXT_MARKERS)
+    has_negation = any(marker in lowered for marker in _FACT_UNAVAILABLE_MARKERS)
+    has_escalation = any(
+        marker in lowered for marker in _EXECUTIVE_ESCALATION_MARKERS
+    )
+    return has_escalation or (has_fact_context and has_negation)
+
 
 def chat(
     session: Session,
@@ -176,16 +213,7 @@ def chat(
         )
     ):
         handoff_reason = HandoffReason.BUYER_REQUESTED
-    elif not approved_facts or any(
-        phrase in assistant_reply_text.lower()
-        for phrase in (
-            "sales executive will confirm",
-            "sales executive will connect",
-            "not in the verified project fact sheet",
-            "currently unavailable",
-            "not available",
-        )
-    ):
+    elif not approved_facts or _indicates_fact_unavailable(assistant_reply_text):
         handoff_reason = HandoffReason.FACT_UNAVAILABLE
 
     if handoff_reason is not None:

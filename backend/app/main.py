@@ -52,6 +52,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         ):
             from app.modules.notifications.scheduler import reminder_scheduler
 
+            reminder_scheduler.poll_interval = (
+                app_settings.reminder_poll_interval_seconds
+            )
             reminder_scheduler.start()
 
         yield
