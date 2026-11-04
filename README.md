@@ -14,7 +14,7 @@ v2.
 
 **Module 0 — Backend Foundation**, **Module 1 — Authentication & User
 Management**, **Module 2 — Projects & Fact Sheets**, **Module 3 — Lead
-Management**, **Module 4 — Conversations & Messages**, and **Module 5 — AI Assistant with Groq** are implemented.
+Management**, **Module 4 — Conversations & Messages**, **Module 5 — AI Assistant with Groq**, and **Module 6 — Availability & Site Visit Booking** are implemented.
 
 Module 0 provides the shared infrastructure:
 
@@ -86,7 +86,20 @@ Module 5 adds:
 - High-resilience chat workflow: buyer messages are persisted and committed before the Groq call, guaranteeing enquiries are never lost during API timeouts, rate limits, or outages.
 - Dedicated chat endpoints: `POST /api/v1/conversations/{conversation_id}/chat` and `POST /api/v1/assistant/chat`.
 
-External messaging (WhatsApp/SMS), site-visit booking, calendar, handoff workflows, notification, and dashboard modules are not implemented yet.
+Module 6 adds:
+
+- UUID-based `visit_slots` and `bookings` tables with an Alembic migration (`62cc99aeab0b`).
+- Administrative visit slot management (`POST /api/v1/slots`, `PATCH /api/v1/slots/{id}`, `PATCH /api/v1/slots/{id}/deactivate`) with time ordering, future start times, project status verification, and duplicate range rejection (`uq_visit_slots_project_time_range`).
+- Real-time availability lookup (`GET /api/v1/slots/available`) dynamically computing remaining capacity (`capacity - active_bookings > 0`) for active projects.
+- PostgreSQL-safe concurrency control via transactional row locking (`SELECT ... FOR UPDATE` on `visit_slots`) preventing double-booking and capacity overruns under high concurrent load.
+- Partial unique index `uq_bookings_lead_slot_active` ensuring a lead cannot hold multiple simultaneous active bookings on the same slot.
+- Automatic lead lifecycle synchronization: `VISIT_BOOKED` on booking creation, `VISIT_CANCELLED` on cancellation (if no active bookings remain), and `VISITED` on visit completion.
+- Mandatory contact consent enforcement (`consent_to_contact: true`) before site visit bookings can be created.
+- Buyer self-service cancellation endpoint (`POST /api/v1/bookings/{id}/cancel`), immediately restoring slot capacity.
+- Strict role-based booking visibility: Buyers view only their own bookings; Sales Executives view bookings only for assigned leads on active projects; Admins view all.
+- Visit outcome status management (`PATCH /api/v1/bookings/{id}/status`) restricted to Admins and assigned Sales Executives (`COMPLETED`, `NO_SHOW`).
+
+External messaging (WhatsApp/SMS), calendar integrations (Google Calendar/Outlook), payment collection, handoff workflows, notification, and dashboard modules are not implemented yet.
 
 ## Technology stack
 

@@ -27,6 +27,12 @@ This directory currently implements:
   strict safety boundaries (no hallucinations, no price negotiations, human
   escalation on request), multilingual responses (English, Hindi, Gujarati),
   and resilient error handling ensuring buyer messages are never lost.
+- **Module 6: Availability & Site Visit Booking** — administrative visit slot
+  management, dynamic real-time slot availability, buyer site-visit booking with
+  concurrency control (`SELECT ... FOR UPDATE` row locks), double-booking
+  prevention, consent-to-contact enforcement, self-service cancellation with
+  immediate capacity release, lead status synchronization, and role-isolated
+  booking visibility (`PENDING`, `CONFIRMED`, `CANCELLED`, `COMPLETED`, `NO_SHOW`).
 
 See the [repository README](../README.md) for the full project overview,
 architecture, API examples, and security notes.
@@ -199,6 +205,17 @@ after restarting with another `.env`. Tokens also expire after
 | `GET` | `/api/v1/messages/{message_id}` | Authenticated | Retrieve an individual message (role-isolated) |
 | `POST` | `/api/v1/conversations/{conversation_id}/chat` | Authenticated | Send a buyer message and receive a fact-grounded AI reply |
 | `POST` | `/api/v1/assistant/chat` | Authenticated | Generic assistant chat endpoint accepting conversation_id in body |
+| `POST` | `/api/v1/slots` | Admin | Create a visit slot for an active project |
+| `GET` | `/api/v1/slots` | Admin / Staff | Paginated visit slots listing with filters |
+| `GET` | `/api/v1/slots/{slot_id}` | Authenticated | Visit slot details |
+| `PATCH` | `/api/v1/slots/{slot_id}` | Admin | Update visit slot capacity or notes |
+| `PATCH` | `/api/v1/slots/{slot_id}/deactivate` | Admin | Soft-deactivate a visit slot |
+| `GET` | `/api/v1/slots/available` | Authenticated | Real-time available slots with remaining capacity |
+| `POST` | `/api/v1/bookings` | Buyer / Staff | Reserve a site visit slot |
+| `GET` | `/api/v1/bookings` | Authenticated | Paginated booking listing (role-isolated) |
+| `GET` | `/api/v1/bookings/{booking_id}` | Authenticated | Booking details (role-isolated) |
+| `POST` | `/api/v1/bookings/{booking_id}/cancel` | Buyer / Admin | Cancel a booking and release capacity |
+| `PATCH` | `/api/v1/bookings/{booking_id}/status` | Admin / Assigned Sales Exec | Update visit outcome status (COMPLETED, NO_SHOW) |
 | `GET` | `/docs` | Public | Swagger UI |
 
 Example registration:
@@ -435,6 +452,81 @@ Example response (HTTP `200`):
 }
 ```
 
+## Availability and site visit bookings
+
+Module 6 implements a robust, concurrency-safe site visit scheduling and reservation system.
+
+### Visit slots & availability
+- **Creation & Management (Admin only)**: Visit slots are defined with a future time range (`start_time < end_time`, `start_time > now`), capacity (1 to 50), and active flag, attached to active projects.
+- **Duplicate Prevention**: Database constraints prevent duplicate identical time slots for the same project (`uq_visit_slots_project_time_range`).
+- **Dynamic Availability**: `GET /api/v1/slots/available?project_id=...` computes available slots dynamically in real time: only upcoming slots with active status and `available_capacity = capacity - active_bookings > 0` are returned.
+
+### Site visit bookings & concurrency control
+- **Capacity Enforcement & Concurrency**: Slot reservation acquires an exclusive row lock (`SELECT ... FOR UPDATE` on PostgreSQL) on the target `visit_slots` row within a transaction. The system verifies `active_bookings < capacity` before confirming the reservation, guaranteeing capacity is never overbooked even under high concurrent load.
+- **Double-booking Prevention**: A partial unique index (`uq_bookings_lead_slot_active`) at the database level enforces that a lead cannot hold multiple active bookings on the same slot.
+- **Lead Lifecycle Synchronization**:
+  - Creating a booking transitions the lead status to `VISIT_BOOKED`.
+  - Cancelling a booking immediately releases the slot capacity and transitions the lead to `VISIT_CANCELLED` (if no other active visits remain).
+  - Marking a booking as `COMPLETED` transitions the lead status to `VISITED`.
+- **Consent Enforcement**: Booking a visit strictly requires `consent_to_contact: true` on the lead record.
+- **Role Isolation**:
+  - **BUYER**: Can view and book visits for their own leads; can view only their own bookings; can cancel their own bookings.
+  - **SALES_EXECUTIVE**: Can view bookings only for leads assigned to them on active projects; can mark visit outcomes (`COMPLETED`, `NO_SHOW`).
+  - **ADMIN**: Full visibility across all slots, bookings, and status transitions.
+
+### Example booking workflow (PowerShell)
+
+```powershell
+$headers = @{ Authorization = "Bearer $($token.access_token)" }
+
+# 1. Admin creates a visit slot (tomorrow 10:00 - 11:00 AM)
+$slotBody = @{
+  project_id = "$($project.id)"
+  start_time = "2026-11-05T10:00:00Z"
+  end_time   = "2026-11-05T11:00:00Z"
+  capacity   = 2
+  notes      = "Morning site inspection batch"
+} | ConvertTo-Json
+
+$slot = Invoke-RestMethod -Method Post `
+  -Uri http://127.0.0.1:8000/api/v1/slots `
+  -Headers $adminHeaders `
+  -ContentType application/json `
+  -Body $slotBody
+
+# 2. Buyer views available slots for the project
+$available = Invoke-RestMethod `
+  -Uri "http://127.0.0.1:8000/api/v1/slots/available?project_id=$($project.id)" `
+  -Headers $headers
+
+# 3. Buyer books the visit slot
+$bookingBody = @{
+  slot_id = "$($slot.id)"
+  lead_id = "$($lead.id)"
+  notes   = "Interested in 3BHK high-floor corner unit"
+} | ConvertTo-Json
+
+$booking = Invoke-RestMethod -Method Post `
+  -Uri http://127.0.0.1:8000/api/v1/bookings `
+  -Headers $headers `
+  -ContentType application/json `
+  -Body $bookingBody
+
+# 4. Buyer cancels booking if needed (capacity immediately restored)
+Invoke-RestMethod -Method Post `
+  -Uri "http://127.0.0.1:8000/api/v1/bookings/$($booking.id)/cancel" `
+  -Headers $headers `
+  -ContentType application/json `
+  -Body (@{ cancellation_reason = "Schedule conflict" } | ConvertTo-Json)
+
+# 5. Assigned executive marks site visit COMPLETED
+Invoke-RestMethod -Method Patch `
+  -Uri "http://127.0.0.1:8000/api/v1/bookings/$($booking.id)/status" `
+  -Headers $execHeaders `
+  -ContentType application/json `
+  -Body (@{ status = "COMPLETED"; notes = "Buyer toured sample flat." } | ConvertTo-Json)
+```
+
 ## Tests
 
 ```powershell
@@ -456,6 +548,7 @@ pytest tests/integration/test_leads.py
 pytest tests/integration/test_conversations.py
 pytest tests/unit/test_ai_assistant_unit.py
 pytest tests/integration/test_ai_assistant.py
+pytest tests/integration/test_bookings.py
 ```
 
 The suite forces testing configuration before importing the app, uses a fresh
@@ -481,7 +574,8 @@ app/
     ├── leads/              Leads, duplicate detection, assignments, lifecycle
     ├── conversations/      Dialogue threads, lifecycle, access control
     ├── messages/           Message models, repository, direct queries
-    └── ai_assistant/       Groq client adapter, prompts, AI chat service
+    ├── ai_assistant/       Groq client adapter, prompts, AI chat service
+    └── bookings/           Visit slots, availability, site visit booking
 alembic/                    Migration environment and versions
 scripts/                    Role seeding and first-admin provisioning
 tests/                      Unit and integration tests
@@ -502,9 +596,10 @@ docker-compose.yml          PostgreSQL 16 with a persistent volume
   fact audit fields but do not create version rows.
 - Fact categories are free-form uppercase labels until an agreed allowlist is
   introduced.
-- No booking, site-visit slots, calendar, human handoff workflow, external
-  messaging (WhatsApp/SMS), notification, or dashboard module is implemented yet;
-  approved-facts, lead-management, conversation, and AI Assistant boundaries exist.
+- No external calendar integration (Google Calendar/Outlook), payment collection,
+  human handoff workflow, external messaging (WhatsApp/SMS), notification, or
+  dashboard module is implemented yet; approved-facts, lead-management,
+  conversation, AI Assistant, and booking boundaries exist.
 - Synchronous database access by design.
 - Docker Compose provides PostgreSQL only; the API runs under Uvicorn.
 - Tests use SQLite; PostgreSQL connectivity and migrations are verified manually.

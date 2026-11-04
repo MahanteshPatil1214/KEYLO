@@ -15,6 +15,7 @@ from sqlalchemy import engine_from_config, pool
 
 from app.core.config import get_settings
 from app.db.base import Base
+from app.modules.bookings import models as bookings_models  # noqa: F401
 from app.modules.conversations import models as conversations_models  # noqa: F401
 from app.modules.leads import models as leads_models  # noqa: F401
 from app.modules.projects import models as projects_models  # noqa: F401
