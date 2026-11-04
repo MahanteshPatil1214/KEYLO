@@ -127,7 +127,21 @@ Module 8 adds:
 - User notification management endpoints: paginated listing (`GET /api/v1/notifications`), unread count (`GET /api/v1/notifications/unread-count`), single read (`PATCH /api/v1/notifications/{id}/read`), and bulk read (`POST /api/v1/notifications/mark-all-read`).
 - Administrative reminder scan trigger endpoint (`POST /api/v1/notifications/reminders/trigger`) with strict role-based access control.
 
-External messaging (WhatsApp/SMS), calendar integrations (Google Calendar/Outlook), payment collection, external notification services, and dashboard modules are not implemented yet.
+Module 9 adds:
+
+- UUID-based `marketing_spends` table with an Alembic migration (`b1f2c3d4e5a6`).
+- Role-scoped admin and sales-executive dashboards computed with SQL aggregation:
+  - `GET /api/v1/dashboard/summary` for lead, booking, visit, conversion, handoff, first-response, and rate metrics.
+  - `GET /api/v1/dashboard/trends` with `DAY`, `WEEK` (Monday start), and `MONTH` buckets.
+  - `GET /api/v1/dashboard/sources` for admin source performance and cost per completed visit.
+  - `GET /api/v1/dashboard/executives` for admin sales executive performance.
+- Date-range (`date_from`, `date_to`) and `project_id` filters on every analytics endpoint.
+- Admin-managed marketing spend CRUD at `/api/v1/dashboard/marketing-spend`, with optional project attribution and period-overlap matching.
+- Database-side conditional counts, grouped aggregates, and an `OFFSET`/`LIMIT` median query that never loads the full message history.
+- Explicit metric denominators and safe zero-denominator handling: rates return `0.0`; undefined response times and cost per visit return `null`.
+- Sales executives see only currently assigned leads, their own bookings, and their own handoffs on active projects; other executives' lead data is never exposed.
+
+External messaging (WhatsApp/SMS), calendar integrations (Google Calendar/Outlook), payment collection, and external notification services are not implemented yet.
 
 ## Technology stack
 
@@ -548,6 +562,15 @@ There is no public admin registration endpoint.
 | `GET` | `/api/v1/messages/{message_id}` | Authenticated | Retrieve an individual message (role-isolated) |
 | `POST` | `/api/v1/conversations/{conversation_id}/chat` | Authenticated | Chat with the AI assistant in an active conversation |
 | `POST` | `/api/v1/assistant/chat` | Authenticated | Chat with the AI assistant specifying conversation_id in body |
+| `GET` | `/api/v1/dashboard/summary` | Admin / Sales Exec | Role-scoped operational summary |
+| `GET` | `/api/v1/dashboard/trends` | Admin / Sales Exec | Role-scoped trend series (`DAY`, `WEEK`, `MONTH`) |
+| `GET` | `/api/v1/dashboard/sources` | Admin | Source performance and cost per completed visit |
+| `GET` | `/api/v1/dashboard/executives` | Admin | Sales executive performance table |
+| `POST` | `/api/v1/dashboard/marketing-spend` | Admin | Record marketing spend |
+| `GET` | `/api/v1/dashboard/marketing-spend` | Admin | Paginated marketing spend listing |
+| `GET` | `/api/v1/dashboard/marketing-spend/{spend_id}` | Admin | Marketing spend detail |
+| `PATCH` | `/api/v1/dashboard/marketing-spend/{spend_id}` | Admin | Update marketing spend |
+| `DELETE` | `/api/v1/dashboard/marketing-spend/{spend_id}` | Admin | Delete marketing spend |
 | `GET` | `/docs` | Public | Swagger UI |
 
 ### Example registration
@@ -1000,6 +1023,114 @@ $chat = Invoke-RestMethod -Method Post `
 $chat.reply
 ```
 
+## Dashboard and analytics
+
+Module 9 exposes role-scoped operational analytics and an admin-managed
+marketing spend ledger. Every metric is produced by database aggregation
+queries; only aggregate rows leave the database (the median response query
+loads at most two ordered values).
+
+### Access and filters
+
+| Endpoint | Access | Scope |
+| --- | --- | --- |
+| `GET /api/v1/dashboard/summary` | Admin / Sales Exec | Admin sees all data; an executive sees only leads actively assigned to them and their own bookings and handoffs on active projects |
+| `GET /api/v1/dashboard/trends` | Admin / Sales Exec | Same role scope as summary |
+| `GET /api/v1/dashboard/sources` | Admin | All sources, including spend-only sources |
+| `GET /api/v1/dashboard/executives` | Admin | All active sales executives |
+| `/api/v1/dashboard/marketing-spend` (CRUD) | Admin | Spend records |
+
+All analytics endpoints accept:
+
+- `date_from` and `date_to` — ISO-8601 timestamps, normalized to UTC. Omitting
+  them means no lower or upper bound. `date_from` must not be after `date_to`.
+- `project_id` — optional UUID project filter.
+- `granularity` — trends only: `DAY` (default), `WEEK` (Monday start), or
+  `MONTH`.
+
+### Metric definitions and denominators
+
+| Metric | Definition | Denominator |
+| --- | --- | --- |
+| `total_leads` | Leads whose `created_at` falls in the range | — |
+| `new_leads` | Cohort leads currently `NEW` | — |
+| `assigned_leads` | Cohort leads with an active (`unassigned_at IS NULL`) assignment | — |
+| `bookings` | Bookings whose `created_at` falls in the range | — |
+| `completed_visits` | Bookings with status `COMPLETED` whose visit slot `start_time` falls in the range | — |
+| `no_show_visits` | Bookings with status `NO_SHOW` whose visit slot `start_time` falls in the range | — |
+| `cancelled_bookings` | Bookings with status `CANCELLED` whose `cancelled_at` falls in the range | — |
+| `conversions` | Cohort leads currently `CONVERTED` | — |
+| `handoffs_total` / `handoffs_active` / `handoffs_resolved` | Handoffs created in the range by status | — |
+| `lead_to_visit_conversion_rate` | Distinct cohort leads holding at least one booking | Cohort `total_leads` |
+| `site_visit_show_up_rate` | `completed_visits` | `completed_visits + no_show_visits` |
+| `lead_conversion_rate` | Cohort `conversions` | Cohort `total_leads` |
+| `cost_per_visit` | Marketing spend for the source | Source `completed_visits` |
+| `average_first_response_seconds` | Mean seconds from a lead's first `BUYER` message to the first subsequent `ASSISTANT` or `SALES_EXECUTIVE` message | Reported as `first_response_sample_size` |
+| `median_first_response_seconds` | Median of the same response intervals | Same sample |
+
+`SYSTEM` messages are never counted as first responses. When a denominator is
+zero, rates return `0.0`; an undefined `cost_per_visit` or response-time value
+returns `null`. Empty result sets return zero counts and empty source/trend
+lists rather than errors.
+
+For sales executives, `assigned_leads` is the executive's own cohort of
+currently assigned leads. Their lead-to-visit and lead-conversion denominators
+use that assigned-lead count. Their bookings are scoped by
+`bookings.executive_id`, and handoffs by `handoffs.executive_id`.
+
+### Source performance and marketing spend
+
+`GET /api/v1/dashboard/sources` returns one row per source that has leads,
+bookings, cancellations, visits, or spend in the selected period. Each row
+includes lead, booking, visit, cancellation, conversion, marketing spend, cost
+per visit, and the three rates defined above.
+
+Marketing spend records have a `source`, inclusive `period_start` /
+`period_end` dates, a non-negative `amount`, optional `notes`, and an optional
+`project_id`. A record with a `project_id` applies only to that project. A
+record without a `project_id` represents developer-wide spend and is included
+only when the dashboard is not filtered to a project.
+
+Spend is matched by **period overlap** with the dashboard date range and the
+full recorded amount is included; it is not prorated. For example, a January
+spend record is fully counted in a one-week January dashboard window. Listing
+filters (`period_from`, `period_to`) use the same overlap rule. Create and
+update requests reject an inverted period, a negative amount, or a nonexistent
+project.
+
+### Example dashboard request
+
+```powershell
+$headers = @{ Authorization = "Bearer $($token.access_token)" }
+
+$summary = Invoke-RestMethod `
+  -Uri "http://127.0.0.1:8000/api/v1/dashboard/summary?date_from=2026-01-01T00:00:00Z&date_to=2026-01-31T23:59:59Z&project_id=$($project.id)" `
+  -Headers $headers
+
+$trends = Invoke-RestMethod `
+  -Uri "http://127.0.0.1:8000/api/v1/dashboard/trends?date_from=2026-01-01T00:00:00Z&date_to=2026-03-31T23:59:59Z&granularity=WEEK" `
+  -Headers $headers
+```
+
+Example marketing spend record:
+
+```powershell
+$spendBody = @{
+  source = "WEBSITE"
+  project_id = "$($project.id)"
+  period_start = "2026-01-01"
+  period_end = "2026-01-31"
+  amount = "150000.00"
+  notes = "January website campaign"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method Post `
+  -Uri http://127.0.0.1:8000/api/v1/dashboard/marketing-spend `
+  -Headers $headers `
+  -ContentType application/json `
+  -Body $spendBody
+```
+
 ## Health endpoints
 
 ### `GET /`
@@ -1127,6 +1258,10 @@ pytest tests/integration/test_authorization.py
 pytest tests/integration/test_projects.py
 pytest tests/integration/test_facts.py
 pytest tests/integration/test_leads.py
+pytest tests/integration/test_bookings.py
+pytest tests/integration/test_handoffs.py
+pytest tests/integration/test_notifications.py
+pytest tests/integration/test_dashboard.py
 pytest -k health
 ```
 
@@ -1207,9 +1342,13 @@ check exercised the PostgreSQL migration and endpoints.
 - Fact categories are normalized uppercase free-form labels. No fixed category
   vocabulary is mandated by `PROJECT.md`; a future agreed allowlist can be
   enforced at the schema boundary without changing storage.
-- Groq/AI integration, conversations, bookings, notifications, and
-  dashboards remain out of scope. Approved-facts and lead-management boundaries
-  are provided for future modules.
+- Dashboard trends return only buckets that contain data; empty days, weeks, or
+  months are not filled in. Marketing spend is matched by period overlap and is
+  not prorated across the requested date range.
+- First-response time is measured from the first `BUYER` message per lead to the
+  first later `ASSISTANT` or `SALES_EXECUTIVE` message. Leads with no such
+  response are excluded from the response sample, and the sample size is
+  reported alongside the average and median.
 - Tests use SQLite for isolation; the live manual check exercised PostgreSQL.
 - Docker Compose starts PostgreSQL only. Containerising the API and frontend is
   outside the current module scope.

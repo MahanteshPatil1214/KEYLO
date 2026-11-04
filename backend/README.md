@@ -39,6 +39,13 @@ This directory currently implements:
   role-isolated handoff visibility, factual conversation summaries, duplicate
   active handoff prevention (`uq_handoffs_conversation_active`), SYSTEM notification
   messages via Module 4, and resolution tracking (`PENDING`, `ASSIGNED`, `IN_PROGRESS`, `RESOLVED`, `CANCELLED`).
+- **Module 8: Notifications & Reminders** — in-app notifications for lead,
+  handoff, and booking events, idempotent delivery, buyer consent enforcement,
+  and scheduled 24-hour/2-hour visit reminders.
+- **Module 9: Dashboard & Analytics** — role-scoped summaries and trends,
+  database-side first-response averages and medians, source performance,
+  executive performance, explicit rate denominators, and admin-managed
+  marketing spend with cost per completed visit.
 
 See the [repository README](../README.md) for the full project overview,
 architecture, API examples, and security notes.
@@ -234,6 +241,15 @@ after restarting with another `.env`. Tokens also expire after
 | `PATCH` | `/api/v1/notifications/{notification_id}/read` | Authenticated | Mark a single notification as read |
 | `POST` | `/api/v1/notifications/mark-all-read` | Authenticated | Mark all unread notifications as read for current user |
 | `POST` | `/api/v1/notifications/reminders/trigger` | Admin | Manually trigger due reminder scan |
+| `GET` | `/api/v1/dashboard/summary` | Admin / Sales Exec | Role-scoped operational summary |
+| `GET` | `/api/v1/dashboard/trends` | Admin / Sales Exec | Role-scoped trend series (`DAY`, `WEEK`, `MONTH`) |
+| `GET` | `/api/v1/dashboard/sources` | Admin | Source performance and cost per completed visit |
+| `GET` | `/api/v1/dashboard/executives` | Admin | Sales executive performance table |
+| `POST` | `/api/v1/dashboard/marketing-spend` | Admin | Record marketing spend |
+| `GET` | `/api/v1/dashboard/marketing-spend` | Admin | Paginated marketing spend listing |
+| `GET` | `/api/v1/dashboard/marketing-spend/{spend_id}` | Admin | Marketing spend detail |
+| `PATCH` | `/api/v1/dashboard/marketing-spend/{spend_id}` | Admin | Update marketing spend |
+| `DELETE` | `/api/v1/dashboard/marketing-spend/{spend_id}` | Admin | Delete marketing spend |
 | `GET` | `/docs` | Public | Swagger UI |
 
 Example registration:
@@ -676,6 +692,61 @@ Invoke-RestMethod -Method Post `
   -Headers $buyerHeaders
 ```
 
+## Dashboard and analytics
+
+Module 9 adds role-scoped analytics and an admin-managed marketing spend ledger.
+Aggregation runs in the database; only aggregate result sets are loaded (the
+median query reads at most two ordered rows).
+
+### Endpoints and access
+
+- `GET /api/v1/dashboard/summary` — Admin and Sales Executive.
+- `GET /api/v1/dashboard/trends` — Admin and Sales Executive.
+- `GET /api/v1/dashboard/sources` — Admin only.
+- `GET /api/v1/dashboard/executives` — Admin only.
+- `POST`, `GET`, `PATCH`, `DELETE /api/v1/dashboard/marketing-spend` — Admin only.
+
+Analytics endpoints accept `date_from`, `date_to`, and `project_id`. Trends also
+accept `granularity` (`DAY`, `WEEK` with Monday start, or `MONTH`). Timestamps
+are normalized to UTC and `date_from` must not be after `date_to`.
+
+Sales executives receive only leads actively assigned to them, bookings where
+they are `executive_id`, and handoffs assigned to them on active projects. Their
+lead cohort is the set of currently assigned leads, which is the denominator for
+their lead-to-visit and lead-conversion rates.
+
+### Metric definitions
+
+- `total_leads`: leads created in the date range.
+- `new_leads`: cohort leads currently `NEW`.
+- `assigned_leads`: cohort leads with an active assignment.
+- `bookings`: bookings created in the date range.
+- `completed_visits` / `no_show_visits`: bookings with that status whose visit
+  slot starts in the date range.
+- `cancelled_bookings`: cancelled bookings whose `cancelled_at` is in range.
+- `conversions`: cohort leads currently `CONVERTED`.
+- `lead_to_visit_conversion_rate`: distinct cohort leads with at least one
+  booking divided by cohort `total_leads`.
+- `site_visit_show_up_rate`: completed visits divided by completed plus no-show
+  visits.
+- `lead_conversion_rate`: cohort conversions divided by cohort `total_leads`.
+- `cost_per_visit`: source marketing spend divided by source completed visits.
+- `average_first_response_seconds` / `median_first_response_seconds`: seconds
+  from a lead's first `BUYER` message to the first later `ASSISTANT` or
+  `SALES_EXECUTIVE` message, with `first_response_sample_size` reported.
+
+Rates return `0.0` when their denominator is zero. Response-time and
+cost-per-visit values return `null` when undefined.
+
+### Marketing spend
+
+`marketing_spends` stores `source`, inclusive `period_start` / `period_end`,
+`amount`, optional `notes`, and optional `project_id`. Project-attributed spend
+applies only to that project. Developer-wide spend (`project_id IS NULL`) is
+included only when no project filter is active. Spend is matched by period
+overlap and the full amount is counted without proration. Inverted periods,
+negative amounts, and nonexistent projects are rejected.
+
 ## Tests
 
 ```powershell
@@ -699,8 +770,8 @@ pytest tests/unit/test_ai_assistant_unit.py
 pytest tests/integration/test_ai_assistant.py
 pytest tests/integration/test_bookings.py
 pytest tests/integration/test_handoffs.py
-pytest tests/integration/test_notifications.py
 pytest tests/integration/test_notifications.py
+pytest tests/integration/test_dashboard.py
 ```
 
 The suite forces testing configuration before importing the app, uses a fresh
@@ -729,7 +800,8 @@ app/
     ├── ai_assistant/       Groq client adapter, prompts, AI chat service
     ├── bookings/           Visit slots, availability, site visit booking
     ├── handoffs/           Human escalation, executive assignment, summaries
-    └── notifications/      In-app alerts, visit reminders, idempotency, scheduler
+    ├── notifications/      In-app alerts, visit reminders, idempotency, scheduler
+    └── dashboard/          Role-scoped analytics and marketing spend ledger
 alembic/                    Migration environment and versions
 scripts/                    Role seeding and first-admin provisioning
 tests/                      Unit and integration tests
@@ -751,9 +823,12 @@ docker-compose.yml          PostgreSQL 16 with a persistent volume
 - Fact categories are free-form uppercase labels until an agreed allowlist is
   introduced.
 - No external calendar integration (Google Calendar/Outlook), payment collection,
-  external messaging (WhatsApp/SMS), external notification service, or
-  dashboard module is implemented yet; approved-facts, lead-management,
-  conversation, AI Assistant, booking, and human handoff boundaries exist.
+  external messaging (WhatsApp/SMS), or external notification service is
+  implemented yet; approved-facts, lead-management, conversation, AI Assistant,
+  booking, human handoff, notification, and dashboard boundaries exist.
+- Dashboard trends include only buckets that contain data. Marketing spend is
+  matched by period overlap and is not prorated. First-response statistics
+  exclude leads with no later `ASSISTANT` or `SALES_EXECUTIVE` reply.
 - Synchronous database access by design.
 - Docker Compose provides PostgreSQL only; the API runs under Uvicorn.
 - Tests use SQLite; PostgreSQL connectivity and migrations are verified manually.
