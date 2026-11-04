@@ -22,6 +22,11 @@ This directory currently implements:
   projects, and buyers, role-based conversation and message access control,
   sender-type integrity validation, message history retrieval (with ordering and
   pagination), conversation status lifecycle, and direct message lookup.
+- **Module 5: AI Assistant with Groq** — fact-grounded buyer chat service
+  powered by the official Groq Python SDK, contextual conversation history,
+  strict safety boundaries (no hallucinations, no price negotiations, human
+  escalation on request), multilingual responses (English, Hindi, Gujarati),
+  and resilient error handling ensuring buyer messages are never lost.
 
 See the [repository README](../README.md) for the full project overview,
 architecture, API examples, and security notes.
@@ -67,6 +72,12 @@ Authentication-related variables:
 | `JWT_ISSUER` | Validated `iss` claim | `keylo-api` |
 | `JWT_AUDIENCE` | Validated `aud` claim | `keylo-clients` |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Access-token lifetime | `30` |
+| `GROQ_API_KEY` | Groq API key (optional in dev/test; masked `SecretStr`) | `None` |
+| `GROQ_MODEL` | Chat completion model | `llama-3.3-70b-versatile` |
+| `GROQ_TIMEOUT_SECONDS` | API request timeout in seconds | `20.0` |
+| `GROQ_MAX_RETRIES` | Maximum retry attempts for API calls | `2` |
+| `ASSISTANT_MAX_HISTORY_MESSAGES` | Past messages supplied for conversational context | `10` |
+| `ASSISTANT_TEMPERATURE` | LLM generation sampling temperature | `0.2` |
 
 Production startup validation requires:
 
@@ -186,6 +197,8 @@ after restarting with another `.env`. Tokens also expire after
 | `POST` | `/api/v1/conversations/{conversation_id}/messages` | Authenticated | Send a message to an active conversation |
 | `GET` | `/api/v1/conversations/{conversation_id}/messages` | Authenticated | Paginated message history (asc/desc order) |
 | `GET` | `/api/v1/messages/{message_id}` | Authenticated | Retrieve an individual message (role-isolated) |
+| `POST` | `/api/v1/conversations/{conversation_id}/chat` | Authenticated | Send a buyer message and receive a fact-grounded AI reply |
+| `POST` | `/api/v1/assistant/chat` | Authenticated | Generic assistant chat endpoint accepting conversation_id in body |
 | `GET` | `/docs` | Public | Swagger UI |
 
 Example registration:
@@ -345,6 +358,83 @@ Invoke-RestMethod -Method Patch `
   -Body (@{ status = "CLOSED" } | ConvertTo-Json)
 ```
 
+## AI Assistant (Groq)
+
+Module 5 provides fact-grounded conversational assistance for buyers enquiring
+about real-estate offerings. The AI Assistant interacts with buyers within
+existing conversations, using the official Groq Python SDK (`llama-3.3-70b-versatile`).
+
+### Strict safety rules and boundaries
+
+1. **Grounded in approved facts only**: The assistant retrieves verified project
+   facts through Module 2's `get_approved_facts()` boundary. Draft facts and
+   pending staged edits are strictly excluded from context.
+2. **Zero invented information**: The assistant never invents amenities,
+   locations, floor plans, delivery dates, or legal/RERA claims.
+3. **No price quotes or discounts**: The assistant never negotiates or promises
+   discounts. Indicative prices in approved facts are quoted as starting estimates
+   only, deferring official quotes to sales executives.
+4. **Unavailable information handling**: If a queried detail is not in approved
+   facts, the assistant politely explains that the information is currently
+   unavailable in the project fact sheet and assures the buyer a sales executive
+   will follow up.
+5. **Human escalation on request**: Buyers can request a human at any time. The
+   assistant acknowledges the request warmly and confirms that a representative
+   will connect directly.
+6. **Multilingual support**: Natively supports English, Hindi, and Gujarati,
+   replying in the language used or requested by the buyer.
+7. **Message preservation guarantee**: When a chat request is received, the
+   buyer's message is persisted and committed to the database **before** the
+   Groq API call. If Groq times out, errors, or if the API key is unconfigured,
+   the buyer's enquiry is never lost, and a graceful fallback response is saved
+   to the conversation.
+
+### Example AI chat request and response
+
+```powershell
+$headers = @{ Authorization = "Bearer $($token.access_token)" }
+
+# Chat within a conversation
+$chatBody = @{
+  message = "Where is the project located and what amenities are available?"
+} | ConvertTo-Json
+
+$chatResponse = Invoke-RestMethod -Method Post `
+  -Uri "http://127.0.0.1:8000/api/v1/conversations/$($conv.id)/chat" `
+  -Headers $headers `
+  -ContentType application/json `
+  -Body $chatBody
+
+$chatResponse.reply
+```
+
+Example response (HTTP `200`):
+
+```json
+{
+  "conversation_id": "7b8e1a2b-3c4d-5e6f-7a8b-9c0d1e2f3a4b",
+  "buyer_message": {
+    "id": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+    "conversation_id": "7b8e1a2b-3c4d-5e6f-7a8b-9c0d1e2f3a4b",
+    "sender_type": "BUYER",
+    "sender_id": "9a8b7c6d-5e4f-3a2b-1c0d-9e8f7a6b5c4d",
+    "content": "Where is the project located and what amenities are available?",
+    "status": "SENT",
+    "created_at": "2026-11-04T07:00:00Z"
+  },
+  "assistant_message": {
+    "id": "2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
+    "conversation_id": "7b8e1a2b-3c4d-5e6f-7a8b-9c0d1e2f3a4b",
+    "sender_type": "ASSISTANT",
+    "sender_id": null,
+    "content": "Skyline Residences is located in Baner, Pune, approximately 10 minutes from the highway. The project offers a swimming pool, clubhouse, and 24/7 security.",
+    "status": "SENT",
+    "created_at": "2026-11-04T07:00:02Z"
+  },
+  "reply": "Skyline Residences is located in Baner, Pune, approximately 10 minutes from the highway. The project offers a swimming pool, clubhouse, and 24/7 security."
+}
+```
+
 ## Tests
 
 ```powershell
@@ -364,6 +454,8 @@ pytest tests/integration/test_projects.py
 pytest tests/integration/test_facts.py
 pytest tests/integration/test_leads.py
 pytest tests/integration/test_conversations.py
+pytest tests/unit/test_ai_assistant_unit.py
+pytest tests/integration/test_ai_assistant.py
 ```
 
 The suite forces testing configuration before importing the app, uses a fresh
@@ -388,7 +480,8 @@ app/
     ├── projects/           Projects, facts, versions, approval, AI boundary
     ├── leads/              Leads, duplicate detection, assignments, lifecycle
     ├── conversations/      Dialogue threads, lifecycle, access control
-    └── messages/           Message models, repository, direct queries
+    ├── messages/           Message models, repository, direct queries
+    └── ai_assistant/       Groq client adapter, prompts, AI chat service
 alembic/                    Migration environment and versions
 scripts/                    Role seeding and first-admin provisioning
 tests/                      Unit and integration tests
@@ -409,9 +502,9 @@ docker-compose.yml          PostgreSQL 16 with a persistent volume
   fact audit fields but do not create version rows.
 - Fact categories are free-form uppercase labels until an agreed allowlist is
   introduced.
-- No Groq/AI, booking, external messaging (WhatsApp/SMS), notification, or
-  dashboard module is implemented yet; approved-facts, lead-management, and
-  conversation boundaries exist.
+- No booking, site-visit slots, calendar, human handoff workflow, external
+  messaging (WhatsApp/SMS), notification, or dashboard module is implemented yet;
+  approved-facts, lead-management, conversation, and AI Assistant boundaries exist.
 - Synchronous database access by design.
 - Docker Compose provides PostgreSQL only; the API runs under Uvicorn.
 - Tests use SQLite; PostgreSQL connectivity and migrations are verified manually.

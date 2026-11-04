@@ -59,6 +59,38 @@ class Settings(BaseSettings):
     jwt_audience: str = "keylo-clients"
     access_token_expire_minutes: int = Field(default=30, ge=1, le=10080)
     lead_create_rate_limit_per_minute: int = Field(default=30, ge=1, le=10000)
+    groq_api_key: SecretStr | None = Field(
+        default=None,
+        description="Groq API key. Optional in dev/test; never log the real value.",
+    )
+    groq_model: str = Field(
+        default="llama-3.3-70b-versatile",
+        description="Groq chat completion model.",
+    )
+    groq_timeout_seconds: float = Field(
+        default=20.0,
+        ge=1.0,
+        le=120.0,
+        description="Timeout for Groq API calls in seconds.",
+    )
+    groq_max_retries: int = Field(
+        default=2,
+        ge=0,
+        le=5,
+        description="Maximum retry attempts for Groq API calls.",
+    )
+    assistant_max_history_messages: int = Field(
+        default=10,
+        ge=1,
+        le=50,
+        description="Maximum historical messages to pass into assistant prompt context.",
+    )
+    assistant_temperature: float = Field(
+        default=0.2,
+        ge=0.0,
+        le=2.0,
+        description="Sampling temperature for assistant chat completions.",
+    )
 
     @property
     def api_v1_prefix(self) -> str:
@@ -96,6 +128,19 @@ class Settings(BaseSettings):
                     raise ValueError("CORS_ALLOWED_ORIGINS must be a list of origins.")
                 return [str(origin).strip() for origin in parsed if str(origin).strip()]
             return [origin.strip() for origin in raw.split(",") if origin.strip()]
+        return value
+
+    @field_validator("groq_api_key", mode="before")
+    @classmethod
+    def _validate_groq_api_key(cls, value: Any) -> SecretStr | None:
+        if value is None:
+            return None
+        if isinstance(value, SecretStr):
+            cleaned = value.get_secret_value().strip()
+            return SecretStr(cleaned) if cleaned else None
+        if isinstance(value, str):
+            cleaned = value.strip()
+            return SecretStr(cleaned) if cleaned else None
         return value
 
     @field_validator("log_level", mode="before")

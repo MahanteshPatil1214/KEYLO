@@ -368,6 +368,42 @@ def create_message(
     return MessageResponse.model_validate(message)
 
 
+def create_assistant_message(
+    session: Session,
+    *,
+    conversation_id: UUID,
+    content: str,
+) -> MessageResponse:
+    """Post an assistant message to an active conversation."""
+
+    conversation = repository.get_conversation_by_id(
+        session, conversation_id, for_update=True
+    )
+    if conversation is None:
+        raise ConversationNotFoundError()
+    if conversation.status != ConversationStatus.ACTIVE.value:
+        raise ConversationInactiveError(conversation.status)
+
+    cleaned = content.strip()
+    if not cleaned:
+        raise EmptyMessageError()
+
+    now = utcnow()
+    message = Message(
+        conversation_id=conversation.id,
+        sender_type=MessageSenderType.ASSISTANT.value,
+        sender_id=None,
+        content=cleaned,
+        status=MessageStatus.SENT.value,
+        created_at=now,
+    )
+    session.add(message)
+    conversation.updated_at = now
+    session.commit()
+    session.refresh(message)
+    return MessageResponse.model_validate(message)
+
+
 def list_messages(
     session: Session,
     *,

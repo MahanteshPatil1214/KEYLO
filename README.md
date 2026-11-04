@@ -14,7 +14,7 @@ v2.
 
 **Module 0 — Backend Foundation**, **Module 1 — Authentication & User
 Management**, **Module 2 — Projects & Fact Sheets**, **Module 3 — Lead
-Management**, and **Module 4 — Conversations & Messages** are implemented.
+Management**, **Module 4 — Conversations & Messages**, and **Module 5 — AI Assistant with Groq** are implemented.
 
 Module 0 provides the shared infrastructure:
 
@@ -76,7 +76,17 @@ Module 4 adds:
 - Direct message lookup endpoint (`GET /api/v1/messages/{message_id}`) with conversation visibility checks.
 - Conversation lifecycle status management (`ACTIVE`, `CLOSED`, `ARCHIVED`), restricting archive capability to administrators.
 
-AI provider (Groq), external messaging (WhatsApp/SMS), booking, handoff workflows, notification, and dashboard modules are not implemented yet.
+Module 5 adds:
+
+- Fact-grounded AI Assistant service powered by the official Groq Python SDK (`llama-3.3-70b-versatile`).
+- Strict grounding in Module 2 approved facts (`get_approved_facts()`), guaranteeing draft facts and staged pending edits are never seen by the model.
+- Robust safety guardrails: zero invented information, refusal to negotiate or quote final prices, and immediate human escalation when requested.
+- Conversational memory passing chronological dialogue history into context.
+- Multilingual assistance natively supporting English, Hindi, and Gujarati.
+- High-resilience chat workflow: buyer messages are persisted and committed before the Groq call, guaranteeing enquiries are never lost during API timeouts, rate limits, or outages.
+- Dedicated chat endpoints: `POST /api/v1/conversations/{conversation_id}/chat` and `POST /api/v1/assistant/chat`.
+
+External messaging (WhatsApp/SMS), site-visit booking, calendar, handoff workflows, notification, and dashboard modules are not implemented yet.
 
 ## Technology stack
 
@@ -148,6 +158,13 @@ KEYLO/
 │   │   │       ├── service.py
 │   │   │       ├── repository.py
 │   │   │       ├── models.py
+│   │   │       ├── schemas.py
+│   │   │       └── exceptions.py
+│   │   │   └── ai_assistant/
+│   │   │       ├── router.py
+│   │   │       ├── service.py
+│   │   │       ├── client.py
+│   │   │       ├── prompts.py
 │   │   │       ├── schemas.py
 │   │   │       └── exceptions.py
 │   │   └── api/v1/
@@ -488,6 +505,8 @@ There is no public admin registration endpoint.
 | `POST` | `/api/v1/conversations/{conversation_id}/messages` | Authenticated | Send a message to an active conversation |
 | `GET` | `/api/v1/conversations/{conversation_id}/messages` | Authenticated | Paginated message history (asc/desc order) |
 | `GET` | `/api/v1/messages/{message_id}` | Authenticated | Retrieve an individual message (role-isolated) |
+| `POST` | `/api/v1/conversations/{conversation_id}/chat` | Authenticated | Chat with the AI assistant in an active conversation |
+| `POST` | `/api/v1/assistant/chat` | Authenticated | Chat with the AI assistant specifying conversation_id in body |
 | `GET` | `/docs` | Public | Swagger UI |
 
 ### Example registration
@@ -895,6 +914,49 @@ $reply = Invoke-RestMethod -Method Post `
 $messages = Invoke-RestMethod `
   -Uri "http://127.0.0.1:8000/api/v1/conversations/$($conv.id)/messages?order=asc&page=1&page_size=50" `
   -Headers $headers
+```
+
+## AI Assistant (Groq)
+
+Module 5 integrates an AI Assistant powered by Groq (`llama-3.3-70b-versatile`)
+to provide fact-grounded, multilingual conversation assistance to buyers.
+
+### Safety rules and boundaries
+
+- **Grounded exclusively in approved facts**: Uses Module 2's `get_approved_facts()`
+  boundary. Draft facts and staged pending edits are never included.
+- **Zero invented data**: Never invents amenities, locations, configurations,
+  prices, discounts, or legal details.
+- **No pricing negotiation**: Does not negotiate or quote final prices.
+  Indicative prices from approved facts are framed as estimates, with final
+  quotes deferred to sales executives.
+- **Transparent missing facts handling**: If a requested fact is missing, the
+  assistant explicitly informs the buyer that the information is currently
+  unavailable in the verified fact sheet and promises executive confirmation.
+- **Human request support**: Buyers can request a human at any time; the
+  assistant warmly acknowledges the request and confirms executive follow-up.
+- **Multilingual capability**: Seamlessly supports English, Hindi, and Gujarati.
+- **Zero-loss enquiry guarantee**: The buyer's message is persisted to the
+  database before calling Groq. If Groq times out, errors, or if the API key is
+  unconfigured, the buyer enquiry is preserved and a polite fallback reply is
+  saved and returned.
+
+### Example AI chat flow
+
+```powershell
+$headers = @{ Authorization = "Bearer $($tokenResponse.access_token)" }
+
+$chatBody = @{
+  message = "Where is Skyline Residences located and what amenities are available?"
+} | ConvertTo-Json
+
+$chat = Invoke-RestMethod -Method Post `
+  -Uri "http://127.0.0.1:8000/api/v1/conversations/$($conv.id)/chat" `
+  -Headers $headers `
+  -ContentType application/json `
+  -Body $chatBody
+
+$chat.reply
 ```
 
 ## Health endpoints
