@@ -92,7 +92,7 @@ Authentication-related variables:
 | `JWT_AUDIENCE` | Validated `aud` claim | `keylo-clients` |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Access-token lifetime | `30` |
 | `GROQ_API_KEY` | Groq API key (optional in dev/test; masked `SecretStr`) | `None` |
-| `GROQ_MODEL` | Chat completion model | `llama-3.3-70b-versatile` |
+| `GROQ_MODEL` | Chat completion model | `openai/gpt-oss-120b` |
 | `GROQ_TIMEOUT_SECONDS` | API request timeout in seconds | `20.0` |
 | `GROQ_MAX_RETRIES` | Maximum retry attempts for API calls | `2` |
 | `ASSISTANT_MAX_HISTORY_MESSAGES` | Past messages supplied for conversational context | `10` |
@@ -413,7 +413,7 @@ Invoke-RestMethod -Method Patch `
 
 Module 5 provides fact-grounded conversational assistance for buyers enquiring
 about real-estate offerings. The AI Assistant interacts with buyers within
-existing conversations, using the official Groq Python SDK (`llama-3.3-70b-versatile`).
+existing conversations, using the official Groq Python SDK (`openai/gpt-oss-120b`).
 
 ### Strict safety rules and boundaries
 

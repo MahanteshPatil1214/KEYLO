@@ -64,7 +64,7 @@ class Settings(BaseSettings):
         description="Groq API key. Optional in dev/test; never log the real value.",
     )
     groq_model: str = Field(
-        default="llama-3.3-70b-versatile",
+        default="openai/gpt-oss-120b",
         description="Groq chat completion model.",
     )
     groq_timeout_seconds: float = Field(

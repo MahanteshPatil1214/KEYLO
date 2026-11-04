@@ -32,7 +32,7 @@ class GroqClient:
         self,
         *,
         api_key: str | None = None,
-        model: str = "llama-3.3-70b-versatile",
+        model: str = "openai/gpt-oss-120b",
         timeout: float = 20.0,
         max_retries: int = 2,
     ) -> None:

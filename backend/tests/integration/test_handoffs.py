@@ -385,7 +385,7 @@ def test_ai_assistant_auto_flags_conversation_when_facts_unavailable(
         def __init__(self) -> None:
             super().__init__(
                 api_key="mock-key",
-                model="llama-3.3-70b-versatile",
+                model="openai/gpt-oss-120b",
             )
 
         def generate_chat_completion(self, **kwargs: Any) -> str:

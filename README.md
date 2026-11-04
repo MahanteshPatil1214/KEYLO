@@ -78,7 +78,7 @@ Module 4 adds:
 
 Module 5 adds:
 
-- Fact-grounded AI Assistant service powered by the official Groq Python SDK (`llama-3.3-70b-versatile`).
+- Fact-grounded AI Assistant service powered by the official Groq Python SDK (`openai/gpt-oss-120b`).
 - Strict grounding in Module 2 approved facts (`get_approved_facts()`), guaranteeing draft facts and staged pending edits are never seen by the model.
 - Robust safety guardrails: zero invented information, refusal to negotiate or quote final prices, and immediate human escalation when requested.
 - Conversational memory passing chronological dialogue history into context.
@@ -982,7 +982,7 @@ $messages = Invoke-RestMethod `
 
 ## AI Assistant (Groq)
 
-Module 5 integrates an AI Assistant powered by Groq (`llama-3.3-70b-versatile`)
+Module 5 integrates an AI Assistant powered by Groq (`openai/gpt-oss-120b`)
 to provide fact-grounded, multilingual conversation assistance to buyers.
 
 ### Safety rules and boundaries

@@ -60,7 +60,7 @@ class MockGroqClient(GroqClient):
     ) -> None:
         super().__init__(
             api_key="mock-groq-key" if configured else None,
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             timeout=10.0,
             max_retries=1,
         )
