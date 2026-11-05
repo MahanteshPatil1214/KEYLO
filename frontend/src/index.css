@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ivory: #f5f2eb;
+  --color-ivory-deep: #ece7dc;
+  --color-charcoal: #202923;
+  --color-charcoal-soft: #38433b;
+  --color-forest: #536b59;
+  --color-forest-deep: #405545;
+  --color-sand: #c5a77d;
+  --color-sand-light: #ddccb1;
+
+  --font-sans: "Manrope Variable", "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "DM Serif Display", "Iowan Old Style", Georgia, serif;
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-ivory font-sans text-charcoal antialiased;
+    font-synthesis-weight: none;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: var(--color-forest);
+    color: var(--color-ivory);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-forest);
+    outline-offset: 3px;
+  }
+
+  section[id],
+  footer[id] {
+    scroll-margin-top: 5.5rem;
+  }
+
+  img {
+    max-width: 100%;
+  }
+}
+
+@layer components {
+  .shell {
+    @apply mx-auto w-full max-w-[1440px] px-5 sm:px-8 lg:px-12 xl:px-16;
+  }
+
+  .eyebrow {
+    @apply text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-forest;
+  }
+
+  .eyebrow-light {
+    @apply text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-ivory;
+  }
+
+  .serif {
+    font-family: var(--font-display);
+    font-weight: 400;
+    letter-spacing: -0.025em;
+  }
+
+  .quiet-link {
+    background-image: linear-gradient(currentColor, currentColor);
+    background-position: 0 100%;
+    background-repeat: no-repeat;
+    background-size: 0% 1px;
+    transition: background-size 350ms var(--ease-out-expo);
+  }
+
+  .quiet-link:hover,
+  .quiet-link:focus-visible {
+    background-size: 100% 1px;
+  }
+
+  .on-dark :focus-visible {
+    outline-color: var(--color-sand);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
