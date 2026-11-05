@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowUpRight, Menu, X } from "lucide-react";
 import { DEMO_MAILTO, navLinks } from "../content";
@@ -73,10 +74,23 @@ export function Navigation() {
           </ul>
         </nav>
 
-        <div className="hidden lg:block">
+        <div className="hidden items-center gap-2 lg:flex">
+          <Link
+            to="/login"
+            className="inline-flex min-h-11 items-center px-2 text-[0.8rem] font-semibold text-charcoal/70 transition-colors duration-200 hover:text-charcoal"
+          >
+            Sign in
+          </Link>
+          <span aria-hidden="true" className="h-4 w-px bg-charcoal/15" />
+          <Link
+            to="/register"
+            className="inline-flex min-h-11 items-center px-2 text-[0.8rem] font-semibold text-charcoal/70 transition-colors duration-200 hover:text-charcoal"
+          >
+            Create account
+          </Link>
           <a
             href={DEMO_MAILTO}
-            className="group inline-flex min-h-11 items-center gap-2 rounded-full border border-charcoal/20 px-5 text-[0.8rem] font-semibold text-charcoal transition-colors duration-300 hover:border-forest hover:bg-forest hover:text-ivory"
+            className="group ml-2 inline-flex min-h-11 items-center gap-2 rounded-full border border-charcoal/20 px-5 text-[0.8rem] font-semibold text-charcoal transition-colors duration-300 hover:border-forest hover:bg-forest hover:text-ivory"
           >
             Request a demo
             <ArrowUpRight
@@ -143,7 +157,23 @@ export function Navigation() {
                 </ul>
               </nav>
 
-              <div className="mt-10">
+              <div className="mt-10 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <Link
+                    to="/login"
+                    onClick={closeMenu}
+                    className="inline-flex min-h-12 items-center justify-center rounded-full border border-charcoal/20 px-4 text-[0.88rem] font-semibold text-charcoal transition-colors hover:border-forest hover:text-forest"
+                  >
+                    Sign in
+                  </Link>
+                  <Link
+                    to="/register"
+                    onClick={closeMenu}
+                    className="inline-flex min-h-12 items-center justify-center rounded-full border border-charcoal/20 px-4 text-[0.88rem] font-semibold text-charcoal transition-colors hover:border-forest hover:text-forest"
+                  >
+                    Create account
+                  </Link>
+                </div>
                 <a
                   href={DEMO_MAILTO}
                   onClick={closeMenu}
@@ -155,7 +185,7 @@ export function Navigation() {
                     className="size-5 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
                   />
                 </a>
-                <p className="mt-4 max-w-xs text-xs leading-5 text-charcoal/70">
+                <p className="max-w-xs pt-1 text-xs leading-5 text-charcoal/70">
                   A walkthrough for residential developers, sales heads and site
                   teams.
                 </p>

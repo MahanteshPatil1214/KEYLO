@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { ArrowUp } from "lucide-react";
 import { DEMO_EMAIL, DEMO_MAILTO, footerColumns } from "../content";
 import { Logo } from "./Logo";
@@ -57,6 +58,22 @@ export function Footer() {
                 >
                   Request a demo
                 </a>
+              </li>
+              <li>
+                <Link
+                  to="/login"
+                  className="inline-flex min-h-9 items-center text-[0.78rem] text-ivory/70 transition-colors hover:text-ivory"
+                >
+                  Sign in
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="/register"
+                  className="inline-flex min-h-9 items-center text-[0.78rem] text-ivory/70 transition-colors hover:text-ivory"
+                >
+                  Create account
+                </Link>
               </li>
               <li>
                 <a
