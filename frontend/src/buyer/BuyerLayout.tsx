@@ -137,7 +137,7 @@ export function BuyerLayout() {
           ===================================================================== */}
       <aside
         aria-label="Buyer Navigation Sidebar"
-        className="fixed inset-y-0 left-0 z-30 hidden w-72 flex-col justify-between border-r border-charcoal/10 bg-ivory/80 backdrop-blur-md lg:flex"
+        className="fixed inset-y-0 left-0 z-30 hidden w-[260px] flex-col justify-between border-r border-charcoal/10 bg-ivory/80 backdrop-blur-md lg:flex"
       >
         <div className="flex flex-col">
           {/* Header & Logo */}
@@ -234,7 +234,7 @@ export function BuyerLayout() {
           ===================================================================== */}
       <header
         aria-label="Keylo Buyer Topbar"
-        className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-charcoal/10 bg-ivory/95 px-4 backdrop-blur-md sm:px-6 lg:h-20 lg:pl-[19rem] lg:pr-8"
+        className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-charcoal/10 bg-ivory/95 px-4 backdrop-blur-md sm:px-6 lg:h-20 lg:pl-[280px] lg:pr-8"
       >
         {/* Mobile Left: Logo & Menu trigger */}
         <div className="flex items-center gap-3 lg:hidden">
@@ -484,8 +484,8 @@ export function BuyerLayout() {
         id="main-content"
         className={
           isConversation
-            ? "h-[calc(100svh-4rem)] lg:h-[calc(100svh-5rem)] lg:pl-72 overflow-hidden pb-16 lg:pb-0"
-            : "pb-24 lg:pb-14 lg:pl-72"
+            ? "h-[calc(100svh-4rem)] lg:h-[calc(100svh-5rem)] lg:pl-[260px] overflow-hidden pb-16 lg:pb-0"
+            : "pb-24 lg:pb-14 lg:pl-[260px]"
         }
       >
         <motion.div

@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import {
   Search,
   MessageSquare,
+  X,
 } from "lucide-react";
 import type { BuyerConversation, Project } from "../api";
 
@@ -11,6 +12,8 @@ type ConversationListProps = {
   onSelectConversation: (id: string) => void;
   projects: Project[];
   isLoading?: boolean;
+  isDrawer?: boolean;
+  onCloseDrawer?: () => void;
 };
 
 export function ConversationList({
@@ -19,6 +22,8 @@ export function ConversationList({
   onSelectConversation,
   projects,
   isLoading,
+  isDrawer,
+  onCloseDrawer,
 }: ConversationListProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<"ALL" | "ACTIVE" | "CLOSED">("ALL");
@@ -72,9 +77,21 @@ export function ConversationList({
               Conversations
             </h2>
           </div>
-          <span className="rounded-full bg-forest/10 px-2 py-0.5 text-[0.65rem] font-semibold text-forest">
-            {conversations.length} Active
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-forest/10 px-2 py-0.5 text-[0.65rem] font-semibold text-forest">
+              {conversations.length} Active
+            </span>
+            {isDrawer && onCloseDrawer && (
+              <button
+                type="button"
+                onClick={onCloseDrawer}
+                aria-label="Close conversation drawer"
+                className="rounded-lg p-1 text-charcoal/60 hover:bg-charcoal/5 hover:text-charcoal"
+              >
+                <X className="size-4" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Search */}
