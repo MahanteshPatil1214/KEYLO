@@ -1,3 +1,10 @@
+import { useEffect, useRef } from "react";
+import {
+  BrowserRouter,
+  Route,
+  Routes,
+  useLocation,
+} from "react-router-dom";
 import { Benefits } from "./components/Benefits";
 import { Challenges } from "./components/Challenges";
 import { DemoCTA } from "./components/DemoCTA";
@@ -6,8 +13,25 @@ import { Hero } from "./components/Hero";
 import { Navigation } from "./components/Navigation";
 import { ProductShowcase } from "./components/ProductShowcase";
 import { Workflow } from "./components/Workflow";
+import { LoginPage } from "./pages/LoginPage";
+import { NotFoundPage } from "./pages/NotFoundPage";
+import { WorkspacePage } from "./pages/WorkspacePage";
 
-export default function App() {
+function ScrollToTopOnRouteChange() {
+  const { pathname } = useLocation();
+  const previousPathname = useRef(pathname);
+
+  useEffect(() => {
+    if (previousPathname.current === pathname) return;
+
+    window.scrollTo(0, 0);
+    previousPathname.current = pathname;
+  }, [pathname]);
+
+  return null;
+}
+
+function HomePage() {
   return (
     <>
       <a
@@ -27,5 +51,27 @@ export default function App() {
       </main>
       <Footer />
     </>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <ScrollToTopOnRouteChange />
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/admin"
+          element={<WorkspacePage expectedRole="ADMIN" />}
+        />
+        <Route
+          path="/sales"
+          element={<WorkspacePage expectedRole="SALES_EXECUTIVE" />}
+        />
+        <Route path="/buyer" element={<WorkspacePage expectedRole="BUYER" />} />
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+    </BrowserRouter>
   );
 }

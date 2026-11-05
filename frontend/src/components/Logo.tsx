@@ -1,9 +1,14 @@
 type LogoProps = {
   tone?: "dark" | "light";
   className?: string;
+  href?: string;
 };
 
-export function Logo({ tone = "dark", className = "" }: LogoProps) {
+export function Logo({
+  tone = "dark",
+  className = "",
+  href = "#top",
+}: LogoProps) {
   const wordmark = tone === "dark" ? "text-charcoal" : "text-ivory";
   const mark =
     tone === "dark"
@@ -12,7 +17,7 @@ export function Logo({ tone = "dark", className = "" }: LogoProps) {
 
   return (
     <a
-      href="#top"
+      href={href}
       aria-label="Keylo home"
       className={`group inline-flex items-center gap-2.5 ${className}`}
     >
