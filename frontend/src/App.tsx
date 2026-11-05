@@ -5,6 +5,7 @@ import {
   Routes,
   useLocation,
 } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Benefits } from "./components/Benefits";
 import { Challenges } from "./components/Challenges";
 import { DemoCTA } from "./components/DemoCTA";
@@ -17,6 +18,22 @@ import { LoginPage } from "./pages/LoginPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { WorkspacePage } from "./pages/WorkspacePage";
+import { BuyerAuthGuard } from "./buyer/BuyerAuthGuard";
+import { BuyerLayout } from "./buyer/BuyerLayout";
+import { BuyerDashboardPage } from "./buyer/BuyerDashboardPage";
+import { ConversationsPage } from "./buyer/ConversationsPage";
+import { SiteVisitsPage } from "./buyer/SiteVisitsPage";
+import { ProjectInfoPage } from "./buyer/ProjectInfoPage";
+import { ProfilePage } from "./buyer/ProfilePage";
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 30,
+      retry: 1,
+    },
+  },
+});
 
 function ScrollToTopOnRouteChange() {
   const { pathname } = useLocation();
@@ -57,23 +74,34 @@ function HomePage() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <ScrollToTopOnRouteChange />
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route
-          path="/admin"
-          element={<WorkspacePage expectedRole="ADMIN" />}
-        />
-        <Route
-          path="/sales"
-          element={<WorkspacePage expectedRole="SALES_EXECUTIVE" />}
-        />
-        <Route path="/buyer" element={<WorkspacePage expectedRole="BUYER" />} />
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
-    </BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <ScrollToTopOnRouteChange />
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route
+            path="/admin"
+            element={<WorkspacePage expectedRole="ADMIN" />}
+          />
+          <Route
+            path="/sales"
+            element={<WorkspacePage expectedRole="SALES_EXECUTIVE" />}
+          />
+          <Route path="/buyer" element={<BuyerAuthGuard />}>
+            <Route element={<BuyerLayout />}>
+              <Route index element={<BuyerDashboardPage />} />
+              <Route path="overview" element={<BuyerDashboardPage />} />
+              <Route path="conversations" element={<ConversationsPage />} />
+              <Route path="visits" element={<SiteVisitsPage />} />
+              <Route path="project" element={<ProjectInfoPage />} />
+              <Route path="profile" element={<ProfilePage />} />
+            </Route>
+          </Route>
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </BrowserRouter>
+    </QueryClientProvider>
   );
 }
