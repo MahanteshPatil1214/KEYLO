@@ -121,3 +121,4 @@ export const QUICK_PROMPTS: Record<SupportedLanguage, QuickPrompt[]> = {
     },
   ],
 };
+
