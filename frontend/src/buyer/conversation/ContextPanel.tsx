@@ -31,6 +31,8 @@ type ContextPanelProps = {
   buyer: BuyerProfile;
   onOpenBookVisit: () => void;
   onOpenRequestHandoff: () => void;
+  isDrawer?: boolean;
+  onClose?: () => void;
   isMobileDrawer?: boolean;
   onCloseMobileDrawer?: () => void;
   onCollapse?: () => void;
@@ -44,6 +46,8 @@ export function ContextPanel({
   buyer,
   onOpenBookVisit,
   onOpenRequestHandoff,
+  isDrawer,
+  onClose,
   isMobileDrawer,
   onCloseMobileDrawer,
   onCollapse,
@@ -71,20 +75,20 @@ export function ContextPanel({
 
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-white p-4 space-y-6">
-      {/* Drawer or Collapsible Inline Header */}
-      {(isMobileDrawer || onCollapse) && (
+      {/* Drawer Header with Close Button */}
+      {(isDrawer || isMobileDrawer || onClose || onCloseMobileDrawer || onCollapse) && (
         <div className="flex items-center justify-between border-b border-charcoal/10 pb-3">
           <div className="flex items-center gap-2">
             <Building2 className="size-4 text-forest" />
             <h3 className="font-serif text-base font-medium text-charcoal">
-              {isMobileDrawer ? "Project Context & Actions" : "Project Context"}
+              Project Context & Actions
             </h3>
           </div>
           <button
             type="button"
-            onClick={isMobileDrawer ? onCloseMobileDrawer : onCollapse}
-            aria-label={isMobileDrawer ? "Close context drawer" : "Collapse context panel"}
-            className="rounded-lg p-1 text-charcoal/60 hover:bg-charcoal/5 hover:text-charcoal"
+            onClick={onClose || onCloseMobileDrawer || onCollapse}
+            aria-label="Close context drawer"
+            className="rounded-lg p-1.5 text-charcoal/60 hover:bg-charcoal/5 hover:text-charcoal transition-colors"
           >
             <X className="size-5" />
           </button>

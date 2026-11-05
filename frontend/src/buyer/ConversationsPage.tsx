@@ -32,37 +32,39 @@ export function ConversationsPage() {
   const [mobileView, setMobileView] = useState<"list" | "chat">("chat");
   const [contextDrawerOpen, setContextDrawerOpen] = useState(false);
   const [tabletConvDrawerOpen, setTabletConvDrawerOpen] = useState(false);
-  const [desktopContextOpen, setDesktopContextOpen] = useState(true);
   const [bookVisitModalOpen, setBookVisitModalOpen] = useState(false);
   const [requestHandoffModalOpen, setRequestHandoffModalOpen] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [lastSentText, setLastSentText] = useState<string | null>(null);
 
-  // Track wide desktop (>= 1600px)
-  const [isWideDesktop, setIsWideDesktop] = useState(() => {
-    if (typeof window !== "undefined") {
-      return window.innerWidth >= 1600;
-    }
-    return false;
-  });
-
-  useEffect(() => {
-    const handleResize = () => {
-      setIsWideDesktop(window.innerWidth >= 1600);
-    };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
   const handleToggleContext = () => {
-    if (isWideDesktop) {
-      setDesktopContextOpen((prev) => !prev);
-    } else {
-      setContextDrawerOpen((prev) => !prev);
-    }
+    setContextDrawerOpen((prev) => !prev);
   };
 
-  const isContextOpen = isWideDesktop ? desktopContextOpen : contextDrawerOpen;
+  // Prevent background scrolling while drawers are open
+  useEffect(() => {
+    if (contextDrawerOpen || tabletConvDrawerOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [contextDrawerOpen, tabletConvDrawerOpen]);
+
+  // Support Escape key to dismiss drawers
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (contextDrawerOpen) setContextDrawerOpen(false);
+        if (tabletConvDrawerOpen) setTabletConvDrawerOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [contextDrawerOpen, tabletConvDrawerOpen]);
+
+  const isContextOpen = contextDrawerOpen;
 
   // 1. Fetch conversations
   const {
@@ -313,44 +315,13 @@ export function ConversationsPage() {
       </section>
 
       {/* =====================================================================
-          3. RIGHT COLUMN: Inline Project Context Panel (Collapsible)
-          - Only shown inline on >= 1600px (2xl) when desktopContextOpen is true!
-          - On 1280–1599px and below, context stays in the slide-over drawer by default!
-          ===================================================================== */}
-      <AnimatePresence>
-        {isWideDesktop && desktopContextOpen && (
-          <motion.aside
-            key="inline-context-panel"
-            initial={{ width: 0, opacity: 0 }}
-            animate={{ width: 320, opacity: 1 }}
-            exit={{ width: 0, opacity: 0 }}
-            transition={{ duration: 0.2, ease: "easeInOut" }}
-            aria-label="Project Information & Actions"
-            className="hidden 2xl:block w-[320px] shrink-0 border-l border-charcoal/10 h-full overflow-hidden bg-white"
-          >
-            <div className="w-[320px] h-full overflow-hidden">
-              <ContextPanel
-                project={currentProject}
-                facts={facts}
-                activeBooking={activeBooking}
-                activeHandoff={activeHandoff}
-                buyer={user}
-                onOpenBookVisit={() => setBookVisitModalOpen(true)}
-                onOpenRequestHandoff={() => setRequestHandoffModalOpen(true)}
-                onCollapse={() => setDesktopContextOpen(false)}
-              />
-            </div>
-          </motion.aside>
-        )}
-      </AnimatePresence>
-
-      {/* =====================================================================
           TABLET CONVERSATION LIST DRAWER (768px–1279px)
           ===================================================================== */}
       <AnimatePresence>
         {tabletConvDrawerOpen && (
           <>
             <motion.div
+              key="tablet-conv-backdrop"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -358,6 +329,7 @@ export function ConversationsPage() {
               className="fixed inset-0 z-40 bg-charcoal/40 backdrop-blur-xs xl:hidden"
             />
             <motion.div
+              key="tablet-conv-drawer"
               initial={{ x: "-100%" }}
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
@@ -382,25 +354,32 @@ export function ConversationsPage() {
       </AnimatePresence>
 
       {/* =====================================================================
-          SLIDE-OVER CONTEXT DRAWER (< 1600px / 2xl)
-          - Used by default at 1280–1599px, 768–1279px, and mobile
+          RIGHT-SIDE OVERLAY CONTEXT DRAWER (All Screen Sizes: Mobile & Desktop)
+          - Opens over chat at 1280px, 1440px, 1920px without resizing/shifting chat
+          - z-40 backdrop, z-50 drawer, close button and outside-click dismissal
           ===================================================================== */}
       <AnimatePresence>
         {contextDrawerOpen && (
           <>
             <motion.div
+              key="context-drawer-backdrop"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setContextDrawerOpen(false)}
-              className="fixed inset-0 z-40 bg-charcoal/40 backdrop-blur-xs 2xl:hidden"
+              className="fixed inset-0 z-40 bg-charcoal/40 backdrop-blur-xs"
+              aria-hidden="true"
             />
             <motion.div
+              key="context-drawer-panel"
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", bounce: 0, duration: 0.28 }}
-              className="fixed inset-y-0 right-0 z-50 w-80 sm:w-96 border-l border-charcoal/10 bg-white shadow-2xl 2xl:hidden"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Project Context & Actions"
+              className="fixed inset-y-0 right-0 z-50 w-80 sm:w-96 md:w-[400px] border-l border-charcoal/10 bg-white shadow-2xl overflow-hidden flex flex-col"
             >
               <ContextPanel
                 project={currentProject}
@@ -416,8 +395,8 @@ export function ConversationsPage() {
                   setContextDrawerOpen(false);
                   setRequestHandoffModalOpen(true);
                 }}
-                isMobileDrawer
-                onCloseMobileDrawer={() => setContextDrawerOpen(false)}
+                isDrawer
+                onClose={() => setContextDrawerOpen(false)}
               />
             </motion.div>
           </>

@@ -213,6 +213,8 @@ export function ChatArea({
             type="button"
             onClick={onToggleContext}
             aria-label={isContextOpen ? "Hide project context" : "Show project context"}
+            aria-expanded={isContextOpen}
+            aria-haspopup="dialog"
             className={`rounded-lg p-1.5 transition-colors shrink-0 ${
               isContextOpen
                 ? "bg-forest/15 text-forest border border-forest/30 shadow-2xs"
