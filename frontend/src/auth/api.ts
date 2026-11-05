@@ -22,6 +22,13 @@ export type ErrorDetail = {
   type?: string;
 };
 
+export type RegisterBuyerRequest = {
+  fullName: string;
+  email: string;
+  password: string;
+  phone?: string;
+};
+
 type TokenResponse = {
   access_token: string;
   token_type: "bearer";
@@ -145,6 +152,22 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
 
   return payload as T;
+}
+
+export function registerBuyer(
+  input: RegisterBuyerRequest,
+): Promise<AuthenticatedUser> {
+  const phone = input.phone?.trim();
+
+  return request<AuthenticatedUser>("/auth/register", {
+    method: "POST",
+    body: JSON.stringify({
+      full_name: input.fullName.trim(),
+      email: input.email.trim().toLowerCase(),
+      password: input.password,
+      ...(phone ? { phone } : {}),
+    }),
+  });
 }
 
 export function loginRequest(

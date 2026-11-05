@@ -15,6 +15,7 @@ import { ProductShowcase } from "./components/ProductShowcase";
 import { Workflow } from "./components/Workflow";
 import { LoginPage } from "./pages/LoginPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
+import { RegisterPage } from "./pages/RegisterPage";
 import { WorkspacePage } from "./pages/WorkspacePage";
 
 function ScrollToTopOnRouteChange() {
@@ -61,6 +62,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
         <Route
           path="/admin"
           element={<WorkspacePage expectedRole="ADMIN" />}
