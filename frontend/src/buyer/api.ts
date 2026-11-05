@@ -311,9 +311,131 @@ export function markNotificationAsRead(
   );
 }
 
+export type ChatResponse = {
+  conversation_id: string;
+  buyer_message: ConversationMessage;
+  assistant_message: ConversationMessage;
+  reply: string;
+};
+
+export type AvailableSlot = {
+  id: string;
+  project_id: string;
+  start_time: string;
+  end_time: string;
+  capacity: number;
+  booked_count: number;
+  available_capacity: number;
+  notes: string | null;
+};
+
+export type AvailableSlotListResponse = {
+  items: AvailableSlot[];
+  total: number;
+};
+
+export type HandoffStatus = "PENDING" | "ASSIGNED" | "IN_PROGRESS" | "RESOLVED";
+
+export type Handoff = {
+  id: string;
+  conversation_id: string;
+  lead_id: string;
+  project_id: string;
+  project_name: string;
+  lead_name: string;
+  lead_phone: string | null;
+  lead_email: string | null;
+  executive_id: string | null;
+  executive_name: string | null;
+  executive_email: string | null;
+  status: HandoffStatus | string;
+  reason: string;
+  summary: string;
+  resolution_notes: string | null;
+  assigned_at: string | null;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type HandoffListResponse = {
+  items: Handoff[];
+  total: number;
+  page: number;
+  page_size: number;
+  pages: number;
+};
+
 export function markAllNotificationsAsRead(): Promise<MarkAllReadResponse> {
   return authenticatedRequest<MarkAllReadResponse>(
     "/notifications/mark-all-read",
     { method: "POST" },
   );
+}
+
+export function sendChatMessage(
+  conversationId: string,
+  message: string,
+): Promise<ChatResponse> {
+  return authenticatedRequest<ChatResponse>(
+    `/conversations/${conversationId}/chat`,
+    {
+      method: "POST",
+      body: JSON.stringify({ message }),
+    },
+  );
+}
+
+export function fetchAvailableSlots(
+  projectId: string,
+): Promise<AvailableSlotListResponse> {
+  return authenticatedRequest<AvailableSlotListResponse>(
+    `/slots/available?project_id=${projectId}`,
+  );
+}
+
+export function createBooking(payload: {
+  slot_id: string;
+  lead_id: string;
+  notes?: string;
+}): Promise<BuyerBooking> {
+  return authenticatedRequest<BuyerBooking>("/bookings", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function requestHandoff(payload: {
+  conversation_id: string;
+  reason?: string;
+  notes?: string;
+}): Promise<Handoff> {
+  return authenticatedRequest<Handoff>("/handoffs", {
+    method: "POST",
+    body: JSON.stringify({
+      conversation_id: payload.conversation_id,
+      reason: payload.reason || "BUYER_REQUESTED",
+      ...(payload.notes ? { notes: payload.notes } : {}),
+    }),
+  });
+}
+
+export function fetchHandoffs(
+  page = 1,
+  pageSize = 20,
+): Promise<HandoffListResponse> {
+  return authenticatedRequest<HandoffListResponse>(
+    `/handoffs?page=${page}&page_size=${pageSize}`,
+  );
+}
+
+export function createBuyerConversation(payload: {
+  lead_id: string;
+  project_id: string;
+  initial_message?: string;
+}): Promise<BuyerConversation> {
+  return authenticatedRequest<BuyerConversation>("/conversations", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }

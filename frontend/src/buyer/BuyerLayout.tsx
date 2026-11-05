@@ -128,6 +128,7 @@ export function BuyerLayout() {
     .toUpperCase() || "B";
 
   const firstName = user.full_name.trim().split(/\s+/)[0];
+  const isConversation = location.pathname.startsWith("/buyer/conversations");
 
   return (
     <div className="min-h-svh bg-ivory text-charcoal">
@@ -481,14 +482,22 @@ export function BuyerLayout() {
           ===================================================================== */}
       <main
         id="main-content"
-        className="pb-24 lg:pb-14 lg:pl-72"
+        className={
+          isConversation
+            ? "h-[calc(100svh-4rem)] lg:h-[calc(100svh-5rem)] lg:pl-72 overflow-hidden pb-16 lg:pb-0"
+            : "pb-24 lg:pb-14 lg:pl-72"
+        }
       >
         <motion.div
           key={location.pathname}
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.22, ease: "easeOut" }}
-          className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10"
+          className={
+            isConversation
+              ? "h-full w-full p-0 sm:p-2 lg:p-4"
+              : "mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10"
+          }
         >
           <Outlet />
         </motion.div>
