@@ -25,8 +25,8 @@ const item: Variants = {
 
 const capabilities = [
   {
-    title: "Answer in the moment",
-    description: "Every enquiry gets a considered first reply, day or night.",
+    title: "A considered reply",
+    description: "Every buyer gets a response written for their question.",
     icon: MessageSquareText,
   },
   {
@@ -81,10 +81,10 @@ export function Hero() {
               variants={item}
               className="mt-8 max-w-[47ch] text-[1rem] leading-7 text-charcoal/70 sm:text-[1.06rem]"
             >
-              Keylo answers every buyer in seconds, using only your approved
-              project facts. It books site visits in genuinely available slots,
-              then hands serious buyers to a named executive, with the whole
-              conversation attached.
+              Keylo gives every buyer a considered first reply, grounded in
+              your approved project facts. It offers site visits only in
+              genuinely available slots, then hands serious buyers to a named
+              executive, with the whole conversation attached.
             </motion.p>
 
             <motion.div
@@ -141,27 +141,18 @@ export function Hero() {
 
             <figure className="relative">
               <div className="relative overflow-hidden bg-ivory-deep">
-                <picture>
-                  <source
-                    media="(max-width: 639px)"
-                    srcSet="/images/hero-800.webp 800w, /images/hero-1200.webp 1200w"
-                    sizes="100vw"
-                    width={800}
-                    height={1000}
-                  />
-                  <img
-                    src="/images/hero-1200.webp"
-                    srcSet="/images/hero-1200.webp 1200w, /images/hero-1600.webp 1600w"
-                    sizes="(min-width: 1024px) 40vw, 100vw"
-                    width={1200}
-                    height={1500}
-                    alt="Contemporary residential architecture in warm afternoon light"
-                    fetchPriority="high"
-                    loading="eager"
-                    decoding="async"
-                    className="aspect-[4/3] w-full object-cover [filter:saturate(0.86)_sepia(0.06)] sm:aspect-[16/10] lg:aspect-[4/5]"
-                  />
-                </picture>
+                <img
+                  src="/images/hero-villa-1200.webp"
+                  srcSet="/images/hero-villa-800.webp 800w, /images/hero-villa-1200.webp 1200w, /images/hero-villa-1600.webp 1600w"
+                  sizes="(min-width: 1024px) 40vw, 100vw"
+                  width={1200}
+                  height={1500}
+                  alt="Modern residential villa with clean lines and landscaped grounds"
+                  fetchPriority="high"
+                  loading="eager"
+                  decoding="async"
+                  className="aspect-[4/5] w-full object-cover [filter:saturate(0.86)_sepia(0.06)] sm:aspect-[16/10] lg:aspect-[4/5]"
+                />
 
                 <div className="absolute left-4 top-4 flex items-center gap-2">
                   <span className="bg-ivory px-2.5 py-1.5 text-[0.58rem] font-semibold uppercase tracking-[0.18em] text-charcoal">
@@ -180,8 +171,8 @@ export function Hero() {
                 </span>
               </div>
 
-              <figcaption className="relative z-10 mx-4 -mt-8 border border-charcoal/10 bg-ivory p-4 sm:mx-6 sm:p-5 lg:-mt-10">
-                <div className="flex items-start justify-between gap-5">
+              <figcaption className="border border-charcoal/10 bg-ivory p-3.5 max-sm:absolute max-sm:inset-x-3 max-sm:bottom-3 max-sm:z-10 sm:mx-6 sm:-mt-8 sm:p-5 lg:-mt-10">
+                <div className="flex items-start justify-between gap-3 sm:gap-5">
                   <div>
                     <p className="flex items-center gap-2 text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-forest">
                       <span
@@ -190,14 +181,14 @@ export function Hero() {
                       />
                       New enquiry
                     </p>
-                    <p className="mt-2 font-display text-[1.35rem] leading-tight tracking-[-0.02em]">
+                    <p className="mt-2 font-display text-[1.2rem] leading-tight tracking-[-0.02em] sm:text-[1.35rem]">
                       Reply sent from approved facts.
                     </p>
-                    <p className="mt-1.5 text-[0.72rem] leading-5 text-charcoal/70">
+                    <p className="mt-1.5 text-[0.68rem] leading-5 text-charcoal/70 sm:text-[0.72rem]">
                       The Grove &middot; 3 BHK &middot; Saturday, 11:00 AM held
                     </p>
                   </div>
-                  <span className="grid size-8 shrink-0 place-items-center rounded-full border border-charcoal/12 text-forest">
+                  <span className="grid size-7 shrink-0 place-items-center rounded-full border border-charcoal/12 text-forest sm:size-8">
                     <ArrowUpRight aria-hidden="true" className="size-4" />
                   </span>
                 </div>
