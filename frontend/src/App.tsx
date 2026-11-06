@@ -34,9 +34,7 @@ import { SalesNotificationsPage } from "./sales/SalesNotificationsPage";
 import { SalesProfilePage } from "./sales/SalesProfilePage";
 import { SalesConversationsPage } from "./sales/SalesConversationsPage";
 import { SalesVisitsPage } from "./sales/SalesVisitsPage";
-import {
-  SalesFollowUpsPage,
-} from "./sales/SalesPlaceholderPages";
+import { SalesFollowUpsPage } from "./sales/SalesFollowUpsPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {

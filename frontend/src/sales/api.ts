@@ -864,3 +864,163 @@ export function updateHandoffStatus(
     body: JSON.stringify({ status, resolution_notes: resolutionNotes }),
   });
 }
+
+// ─── Follow-up types & endpoints ──────────────────────────────────────────────
+
+export type FollowUpType = "CALL" | "WHATSAPP" | "EMAIL" | "MEETING" | "OTHER";
+export type FollowUpPriority = "LOW" | "MEDIUM" | "HIGH";
+export type FollowUpStatus = "PENDING" | "COMPLETED" | "CANCELLED";
+export type FollowUpOutcome =
+  | "INTERESTED"
+  | "NOT_INTERESTED"
+  | "NO_RESPONSE"
+  | "CALLBACK_REQUESTED"
+  | "CONVERTED";
+export type FollowUpCategory =
+  | "DUE_TODAY"
+  | "OVERDUE"
+  | "UPCOMING"
+  | "COMPLETED"
+  | "CANCELLED";
+
+export type SalesFollowUp = {
+  id: string;
+  lead_id: string;
+  project_id: string;
+  executive_id: string;
+  scheduled_at: string;
+  type: FollowUpType;
+  priority: FollowUpPriority;
+  status: FollowUpStatus;
+  notes: string | null;
+  next_action: string | null;
+  outcome: FollowUpOutcome | null;
+  outcome_notes: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  buyer_name: string;
+  buyer_phone: string | null;
+  buyer_email: string | null;
+  lead_status: string;
+  project_name: string;
+  executive_name: string;
+  category: string;
+};
+
+export type FollowUpListResponse = {
+  items: SalesFollowUp[];
+  total: number;
+  page: number;
+  page_size: number;
+  pages: number;
+};
+
+export type FollowUpMetrics = {
+  total: number;
+  due_today: number;
+  overdue: number;
+  upcoming: number;
+  completed: number;
+};
+
+export function fetchFollowUpsPage(options: {
+  page?: number;
+  pageSize?: number;
+  leadId?: string;
+  projectId?: string;
+  status?: FollowUpStatus;
+  type?: FollowUpType;
+  priority?: FollowUpPriority;
+  category?: string;
+  search?: string;
+} = {}): Promise<FollowUpListResponse> {
+  const query = new URLSearchParams();
+  if (options.page) query.set("page", String(options.page));
+  if (options.pageSize) query.set("page_size", String(options.pageSize));
+  if (options.leadId) query.set("lead_id", options.leadId);
+  if (options.projectId) query.set("project_id", options.projectId);
+  if (options.status) query.set("status", options.status);
+  if (options.type) query.set("type", options.type);
+  if (options.priority) query.set("priority", options.priority);
+  if (options.category && options.category !== "ALL") query.set("category", options.category);
+  if (options.search) query.set("search", options.search);
+
+  const qs = query.toString();
+  return authenticatedRequest<FollowUpListResponse>(`/follow-ups${qs ? `?${qs}` : ""}`);
+}
+
+export function fetchFollowUpMetrics(): Promise<FollowUpMetrics> {
+  return authenticatedRequest<FollowUpMetrics>("/follow-ups/metrics");
+}
+
+export function fetchFollowUp(followUpId: string): Promise<SalesFollowUp> {
+  return authenticatedRequest<SalesFollowUp>(`/follow-ups/${followUpId}`);
+}
+
+export function createFollowUp(payload: {
+  lead_id: string;
+  scheduled_at: string;
+  type?: FollowUpType;
+  priority?: FollowUpPriority;
+  notes?: string;
+  next_action?: string;
+}): Promise<SalesFollowUp> {
+  return authenticatedRequest<SalesFollowUp>("/follow-ups", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateFollowUp(
+  followUpId: string,
+  payload: {
+    scheduled_at?: string;
+    type?: FollowUpType;
+    priority?: FollowUpPriority;
+    notes?: string;
+    next_action?: string;
+  },
+): Promise<SalesFollowUp> {
+  return authenticatedRequest<SalesFollowUp>(`/follow-ups/${followUpId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function rescheduleFollowUp(
+  followUpId: string,
+  payload: {
+    scheduled_at: string;
+    notes?: string;
+  },
+): Promise<SalesFollowUp> {
+  return authenticatedRequest<SalesFollowUp>(`/follow-ups/${followUpId}/reschedule`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function completeFollowUp(
+  followUpId: string,
+  payload: {
+    outcome: FollowUpOutcome;
+    outcome_notes?: string;
+    next_action?: string;
+  },
+): Promise<SalesFollowUp> {
+  return authenticatedRequest<SalesFollowUp>(`/follow-ups/${followUpId}/complete`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function cancelFollowUp(
+  followUpId: string,
+  reason?: string,
+): Promise<SalesFollowUp> {
+  return authenticatedRequest<SalesFollowUp>(`/follow-ups/${followUpId}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
