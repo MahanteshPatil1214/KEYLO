@@ -64,6 +64,93 @@ export type LeadListResponse = {
   pages: number;
 };
 
+export type SalesProjectStatus = "DRAFT" | "ACTIVE" | "INACTIVE";
+
+export type SalesProject = {
+  id: string;
+  name: string;
+  slug: string;
+  location: string;
+  description: string | null;
+  rera_number: string | null;
+  status: SalesProjectStatus;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProjectListResponse = {
+  items: SalesProject[];
+  total: number;
+  page: number;
+  page_size: number;
+  pages: number;
+};
+
+export type LeadAssignment = {
+  id: string;
+  lead_id: string;
+  executive_id: string;
+  assigned_by: string;
+  assigned_at: string;
+  unassigned_at: string | null;
+  is_active: boolean;
+};
+
+export type LeadAssignmentListResponse = {
+  items: LeadAssignment[];
+  total: number;
+  page: number;
+  page_size: number;
+  pages: number;
+};
+
+export type ConversationStatus = "ACTIVE" | "CLOSED" | "ARCHIVED";
+
+export type SalesConversation = {
+  id: string;
+  lead_id: string;
+  project_id: string;
+  buyer_id: string;
+  status: ConversationStatus;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ConversationListResponse = {
+  items: SalesConversation[];
+  total: number;
+  page: number;
+  page_size: number;
+  pages: number;
+};
+
+export type MessageSenderType =
+  | "BUYER"
+  | "ASSISTANT"
+  | "SALES_EXECUTIVE"
+  | "SYSTEM";
+
+export type MessageStatus = "SENT" | "DELIVERED" | "READ";
+
+export type SalesMessage = {
+  id: string;
+  conversation_id: string;
+  sender_type: MessageSenderType;
+  sender_id: string | null;
+  content: string;
+  status: MessageStatus;
+  created_at: string;
+};
+
+export type MessageListResponse = {
+  items: SalesMessage[];
+  total: number;
+  page: number;
+  page_size: number;
+  pages: number;
+};
+
 export type SourceLeadCount = {
   source: LeadSource;
   leads: number;
@@ -291,6 +378,277 @@ export function fetchLeadStatusTotal(status: LeadStatus): Promise<number> {
   return authenticatedRequest<LeadListResponse>(
     `/leads?${query.toString()}`,
   ).then((response) => response.total);
+}
+
+type PaginatedResponse<T> = {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+  pages: number;
+};
+
+const MAX_PAGE_REQUESTS = 50;
+
+async function collectAllPages<T>(
+  fetchPage: (page: number) => Promise<PaginatedResponse<T>>,
+  maxPages = MAX_PAGE_REQUESTS,
+): Promise<T[]> {
+  const first = await fetchPage(1);
+  const totalPages = Math.min(first.pages, maxPages);
+  const items = [...first.items];
+
+  if (totalPages > 1) {
+    const remaining = await Promise.all(
+      Array.from({ length: totalPages - 1 }, (_, index) =>
+        fetchPage(index + 2),
+      ),
+    );
+    for (const response of remaining) {
+      items.push(...response.items);
+    }
+  }
+
+  return items;
+}
+
+export type LeadListQuery = {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  projectId?: string;
+  source?: LeadSource;
+  status?: LeadStatus;
+  assignedExecutiveId?: string;
+  order?: "asc" | "desc";
+};
+
+export function fetchLeads(query: LeadListQuery = {}): Promise<LeadListResponse> {
+  const params = new URLSearchParams();
+  params.set("page", String(query.page ?? 1));
+  params.set("page_size", String(query.pageSize ?? 100));
+  params.set("order", query.order ?? "desc");
+  if (query.search) params.set("search", query.search);
+  if (query.projectId) params.set("project_id", query.projectId);
+  if (query.source) params.set("source", query.source);
+  if (query.status) params.set("status", query.status);
+  if (query.assignedExecutiveId) {
+    params.set("assigned_executive_id", query.assignedExecutiveId);
+  }
+  return authenticatedRequest<LeadListResponse>(`/leads?${params.toString()}`);
+}
+
+export function fetchAllAssignedLeads(): Promise<SalesLead[]> {
+  return collectAllPages((page) => fetchLeads({ page, pageSize: 100 }));
+}
+
+export function fetchLeadDetail(leadId: string): Promise<SalesLead> {
+  return authenticatedRequest<SalesLead>(`/leads/${leadId}`);
+}
+
+export function updateLeadStatus(
+  leadId: string,
+  status: LeadStatus,
+): Promise<SalesLead> {
+  return authenticatedRequest<SalesLead>(`/leads/${leadId}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+}
+
+export function fetchLeadAssignmentsPage(
+  leadId: string,
+  page = 1,
+  pageSize = 100,
+): Promise<LeadAssignmentListResponse> {
+  const params = new URLSearchParams({
+    page: String(page),
+    page_size: String(pageSize),
+  });
+  return authenticatedRequest<LeadAssignmentListResponse>(
+    `/leads/${leadId}/assignments?${params.toString()}`,
+  );
+}
+
+export function fetchAllLeadAssignments(
+  leadId: string,
+): Promise<LeadAssignment[]> {
+  return collectAllPages((page) =>
+    fetchLeadAssignmentsPage(leadId, page, 100),
+  );
+}
+
+export function fetchProjectsPage(
+  page = 1,
+  pageSize = 100,
+): Promise<ProjectListResponse> {
+  const params = new URLSearchParams({
+    page: String(page),
+    page_size: String(pageSize),
+  });
+  return authenticatedRequest<ProjectListResponse>(
+    `/projects?${params.toString()}`,
+  );
+}
+
+export function fetchAllProjects(): Promise<SalesProject[]> {
+  return collectAllPages((page) => fetchProjectsPage(page, 100));
+}
+
+export function fetchConversationsPage(options: {
+  page?: number;
+  pageSize?: number;
+  leadId?: string;
+  projectId?: string;
+  status?: ConversationStatus;
+} = {}): Promise<ConversationListResponse> {
+  const params = new URLSearchParams({
+    page: String(options.page ?? 1),
+    page_size: String(options.pageSize ?? 100),
+  });
+  if (options.leadId) params.set("lead_id", options.leadId);
+  if (options.projectId) params.set("project_id", options.projectId);
+  if (options.status) params.set("status", options.status);
+  return authenticatedRequest<ConversationListResponse>(
+    `/conversations?${params.toString()}`,
+  );
+}
+
+export function fetchAllConversations(): Promise<SalesConversation[]> {
+  return collectAllPages((page) =>
+    fetchConversationsPage({ page, pageSize: 100 }),
+  );
+}
+
+export function fetchAllLeadConversations(
+  leadId: string,
+): Promise<SalesConversation[]> {
+  return collectAllPages((page) =>
+    fetchConversationsPage({ page, pageSize: 100, leadId }),
+  );
+}
+
+export function fetchMessagesPage(
+  conversationId: string,
+  page = 1,
+  pageSize = 100,
+  order: "asc" | "desc" = "asc",
+): Promise<MessageListResponse> {
+  const params = new URLSearchParams({
+    page: String(page),
+    page_size: String(pageSize),
+    order,
+  });
+  return authenticatedRequest<MessageListResponse>(
+    `/conversations/${conversationId}/messages?${params.toString()}`,
+  );
+}
+
+export async function fetchAllConversationMessages(
+  conversationId: string,
+): Promise<SalesMessage[]> {
+  const messages = await collectAllPages((page) =>
+    fetchMessagesPage(conversationId, page, 100, "asc"),
+  );
+  return messages.sort(
+    (left, right) =>
+      new Date(left.created_at).getTime() -
+      new Date(right.created_at).getTime(),
+  );
+}
+
+export function fetchBookingsPage(options: {
+  page?: number;
+  pageSize?: number;
+  leadId?: string;
+  projectId?: string;
+  status?: BookingStatus;
+} = {}): Promise<BookingListResponse> {
+  const params = new URLSearchParams({
+    page: String(options.page ?? 1),
+    page_size: String(options.pageSize ?? 100),
+  });
+  if (options.leadId) params.set("lead_id", options.leadId);
+  if (options.projectId) params.set("project_id", options.projectId);
+  if (options.status) params.set("status", options.status);
+  return authenticatedRequest<BookingListResponse>(
+    `/bookings?${params.toString()}`,
+  );
+}
+
+export function fetchAllBookings(): Promise<SalesBooking[]> {
+  return collectAllPages((page) => fetchBookingsPage({ page, pageSize: 100 }));
+}
+
+export function fetchAllLeadBookings(leadId: string): Promise<SalesBooking[]> {
+  return collectAllPages((page) =>
+    fetchBookingsPage({ page, pageSize: 100, leadId }),
+  );
+}
+
+export function fetchHandoffsPage(options: {
+  page?: number;
+  pageSize?: number;
+  leadId?: string;
+  projectId?: string;
+} = {}): Promise<HandoffListResponse> {
+  const params = new URLSearchParams({
+    page: String(options.page ?? 1),
+    page_size: String(options.pageSize ?? 100),
+  });
+  if (options.leadId) params.set("lead_id", options.leadId);
+  if (options.projectId) params.set("project_id", options.projectId);
+  return authenticatedRequest<HandoffListResponse>(
+    `/handoffs?${params.toString()}`,
+  );
+}
+
+export function fetchAllHandoffs(): Promise<SalesHandoff[]> {
+  return collectAllPages((page) => fetchHandoffsPage({ page, pageSize: 100 }));
+}
+
+export function fetchAllLeadHandoffs(leadId: string): Promise<SalesHandoff[]> {
+  return collectAllPages((page) =>
+    fetchHandoffsPage({ page, pageSize: 100, leadId }),
+  );
+}
+
+export type LeadEnquiryHistory = {
+  assignments: LeadAssignment[];
+  conversations: SalesConversation[];
+  messagesByConversation: Record<string, SalesMessage[]>;
+  bookings: SalesBooking[];
+  handoffs: SalesHandoff[];
+};
+
+export async function fetchLeadEnquiryHistory(
+  leadId: string,
+): Promise<LeadEnquiryHistory> {
+  const [assignments, conversations, bookings, handoffs] = await Promise.all([
+    fetchAllLeadAssignments(leadId),
+    fetchAllLeadConversations(leadId),
+    fetchAllLeadBookings(leadId),
+    fetchAllLeadHandoffs(leadId),
+  ]);
+
+  const messageLists = await Promise.all(
+    conversations.map((conversation) =>
+      fetchAllConversationMessages(conversation.id),
+    ),
+  );
+
+  const messagesByConversation: Record<string, SalesMessage[]> = {};
+  conversations.forEach((conversation, index) => {
+    messagesByConversation[conversation.id] = messageLists[index] ?? [];
+  });
+
+  return {
+    assignments,
+    conversations,
+    messagesByConversation,
+    bookings,
+    handoffs,
+  };
 }
 
 export type PendingFollowUpCounts = {

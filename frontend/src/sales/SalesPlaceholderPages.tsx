@@ -2,21 +2,8 @@ import {
   CalendarDays,
   ListChecks,
   MessageSquare,
-  Users,
 } from "lucide-react";
 import { SalesModulePlaceholder } from "./SalesModulePlaceholder";
-
-export function SalesLeadsPage() {
-  return (
-    <SalesModulePlaceholder
-      eyebrow="Pipeline"
-      title="My leads"
-      moduleName="Lead"
-      description="The lead board will live here, scoped to the enquiries actively assigned to you."
-      icon={Users}
-    />
-  );
-}
 
 export function SalesConversationsPage() {
   return (

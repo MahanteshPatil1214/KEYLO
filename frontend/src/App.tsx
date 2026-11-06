@@ -29,12 +29,12 @@ import { ProfilePage } from "./buyer/ProfilePage";
 import { SalesAuthGuard } from "./sales/SalesAuthGuard";
 import { SalesLayout } from "./sales/SalesLayout";
 import { SalesDashboardPage } from "./sales/SalesDashboardPage";
+import { SalesLeadsPage } from "./sales/SalesLeadsPage";
 import { SalesNotificationsPage } from "./sales/SalesNotificationsPage";
 import { SalesProfilePage } from "./sales/SalesProfilePage";
 import {
   SalesConversationsPage,
   SalesFollowUpsPage,
-  SalesLeadsPage,
   SalesVisitsPage,
 } from "./sales/SalesPlaceholderPages";
 
