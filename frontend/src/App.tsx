@@ -33,9 +33,9 @@ import { SalesLeadsPage } from "./sales/SalesLeadsPage";
 import { SalesNotificationsPage } from "./sales/SalesNotificationsPage";
 import { SalesProfilePage } from "./sales/SalesProfilePage";
 import { SalesConversationsPage } from "./sales/SalesConversationsPage";
+import { SalesVisitsPage } from "./sales/SalesVisitsPage";
 import {
   SalesFollowUpsPage,
-  SalesVisitsPage,
 } from "./sales/SalesPlaceholderPages";
 
 const queryClient = new QueryClient({

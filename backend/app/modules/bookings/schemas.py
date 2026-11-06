@@ -114,6 +114,45 @@ class BookingCancelRequest(BaseModel):
     cancellation_reason: str | None = Field(default=None, max_length=500)
 
 
+class BookingRescheduleRequest(BaseModel):
+    """Input payload to reschedule a site visit to a different slot or custom time."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    slot_id: UUID | None = None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
+    notes: str | None = Field(default=None, max_length=1000)
+
+    @model_validator(mode="after")
+    def _validate_reschedule_target(self) -> BookingRescheduleRequest:
+        if self.slot_id is None and (self.start_time is None or self.end_time is None):
+            raise ValueError(
+                "Either slot_id or both start_time and end_time must be provided."
+            )
+        if self.start_time is not None and self.end_time is not None:
+            if self.start_time >= self.end_time:
+                raise ValueError("start_time must be strictly before end_time.")
+        return self
+
+
+class BookingCustomScheduleRequest(BaseModel):
+    """Input payload when a sales executive or admin schedules a visit with custom date/time."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    lead_id: UUID
+    start_time: datetime
+    end_time: datetime
+    notes: str | None = Field(default=None, max_length=1000)
+
+    @model_validator(mode="after")
+    def _validate_time_ordering(self) -> BookingCustomScheduleRequest:
+        if self.start_time >= self.end_time:
+            raise ValueError("Start time must be strictly before end time.")
+        return self
+
+
 class BookingStatusUpdateRequest(BaseModel):
     """Input payload when an admin or sales executive updates visit status."""
 

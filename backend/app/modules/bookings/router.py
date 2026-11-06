@@ -16,7 +16,9 @@ from app.modules.bookings.schemas import (
     AvailableSlotListResponse,
     BookingCancelRequest,
     BookingCreateRequest,
+    BookingCustomScheduleRequest,
     BookingListResponse,
+    BookingRescheduleRequest,
     BookingResponse,
     BookingStatusUpdateRequest,
     VisitSlotCreateRequest,
@@ -34,6 +36,8 @@ from app.modules.bookings.service import (
     get_slot,
     list_bookings,
     list_slots,
+    reschedule_booking,
+    schedule_custom_booking,
     update_booking_status,
     update_slot,
 )
@@ -228,6 +232,22 @@ def get_booking_endpoint(
 
 
 @bookings_router.post(
+    "/schedule-custom",
+    response_model=BookingResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Schedule a visit at custom date/time (Sales Executive or Admin)",
+)
+def schedule_custom_booking_endpoint(
+    payload: BookingCustomScheduleRequest,
+    current_user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+) -> BookingResponse:
+    """Schedule a site visit at a chosen time, automatically creating a slot if none exists."""
+
+    return schedule_custom_booking(db, actor=current_user, payload=payload)
+
+
+@bookings_router.post(
     "/{booking_id}/cancel",
     response_model=BookingResponse,
     summary="Cancel a site visit booking",
@@ -241,6 +261,24 @@ def cancel_booking_endpoint(
     """Cancel a booking, releasing the slot capacity."""
 
     return cancel_booking(
+        db, actor=current_user, booking_id=booking_id, payload=payload
+    )
+
+
+@bookings_router.post(
+    "/{booking_id}/reschedule",
+    response_model=BookingResponse,
+    summary="Reschedule a site visit booking",
+)
+def reschedule_booking_endpoint(
+    booking_id: UUID,
+    payload: BookingRescheduleRequest,
+    current_user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+) -> BookingResponse:
+    """Reschedule a site visit booking to a new available slot."""
+
+    return reschedule_booking(
         db, actor=current_user, booking_id=booking_id, payload=payload
     )
 

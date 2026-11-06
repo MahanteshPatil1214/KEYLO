@@ -586,6 +586,96 @@ export function fetchAllLeadBookings(leadId: string): Promise<SalesBooking[]> {
   );
 }
 
+export type AvailableSlot = {
+  id: string;
+  project_id: string;
+  start_time: string;
+  end_time: string;
+  capacity: number;
+  booked_count: number;
+  available_capacity: number;
+  notes: string | null;
+};
+
+export type AvailableSlotListResponse = {
+  items: AvailableSlot[];
+  total: number;
+};
+
+export function fetchAvailableSlots(
+  projectId: string,
+): Promise<AvailableSlotListResponse> {
+  const query = new URLSearchParams({ project_id: projectId });
+  return authenticatedRequest<AvailableSlotListResponse>(
+    `/slots/available?${query.toString()}`,
+  );
+}
+
+export function createBooking(payload: {
+  slot_id: string;
+  lead_id: string;
+  notes?: string;
+}): Promise<SalesBooking> {
+  return authenticatedRequest<SalesBooking>("/bookings", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function scheduleCustomBooking(payload: {
+  lead_id: string;
+  start_time: string;
+  end_time: string;
+  notes?: string;
+}): Promise<SalesBooking> {
+  return authenticatedRequest<SalesBooking>("/bookings/schedule-custom", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function rescheduleBooking(
+  bookingId: string,
+  options: {
+    slotId?: string;
+    startTime?: string;
+    endTime?: string;
+    notes?: string;
+  },
+): Promise<SalesBooking> {
+  const payload: Record<string, unknown> = {};
+  if (options.slotId) payload.slot_id = options.slotId;
+  if (options.startTime) payload.start_time = options.startTime;
+  if (options.endTime) payload.end_time = options.endTime;
+  if (options.notes !== undefined) payload.notes = options.notes;
+
+  return authenticatedRequest<SalesBooking>(`/bookings/${bookingId}/reschedule`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function cancelBooking(
+  bookingId: string,
+  cancellationReason?: string,
+): Promise<SalesBooking> {
+  return authenticatedRequest<SalesBooking>(`/bookings/${bookingId}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({ cancellation_reason: cancellationReason }),
+  });
+}
+
+export function updateBookingOutcome(
+  bookingId: string,
+  status: BookingStatus,
+  notes?: string,
+): Promise<SalesBooking> {
+  return authenticatedRequest<SalesBooking>(`/bookings/${bookingId}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status, notes }),
+  });
+}
+
 export function fetchHandoffsPage(options: {
   page?: number;
   pageSize?: number;

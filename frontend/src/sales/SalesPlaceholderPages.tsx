@@ -1,20 +1,7 @@
 import {
-  CalendarDays,
   ListChecks,
 } from "lucide-react";
 import { SalesModulePlaceholder } from "./SalesModulePlaceholder";
-
-export function SalesVisitsPage() {
-  return (
-    <SalesModulePlaceholder
-      eyebrow="Site visits"
-      title="Site visits"
-      moduleName="Site visit"
-      description="The visit calendar and booking workflow will be added after the dashboard release."
-      icon={CalendarDays}
-    />
-  );
-}
 
 export function SalesFollowUpsPage() {
   return (

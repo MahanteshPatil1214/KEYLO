@@ -255,7 +255,18 @@ def count_bookings(
     if buyer_id is not None:
         statement = statement.where(Booking.buyer_id == buyer_id)
     if executive_id is not None:
-        statement = statement.where(Booking.executive_id == executive_id)
+        from app.modules.leads.models import LeadAssignment
+
+        active_assigned_leads = (
+            select(LeadAssignment.lead_id).where(
+                LeadAssignment.executive_id == executive_id,
+                LeadAssignment.unassigned_at.is_(None),
+            )
+        )
+        statement = statement.where(
+            (Booking.executive_id == executive_id)
+            | Booking.lead_id.in_(active_assigned_leads)
+        )
     if project_id is not None:
         statement = statement.where(Booking.project_id == project_id)
     if lead_id is not None:
@@ -296,7 +307,18 @@ def list_bookings(
     if buyer_id is not None:
         statement = statement.where(Booking.buyer_id == buyer_id)
     if executive_id is not None:
-        statement = statement.where(Booking.executive_id == executive_id)
+        from app.modules.leads.models import LeadAssignment
+
+        active_assigned_leads = (
+            select(LeadAssignment.lead_id).where(
+                LeadAssignment.executive_id == executive_id,
+                LeadAssignment.unassigned_at.is_(None),
+            )
+        )
+        statement = statement.where(
+            (Booking.executive_id == executive_id)
+            | Booking.lead_id.in_(active_assigned_leads)
+        )
     if project_id is not None:
         statement = statement.where(Booking.project_id == project_id)
     if lead_id is not None:

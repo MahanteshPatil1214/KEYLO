@@ -36,7 +36,9 @@ from app.modules.bookings.schemas import (
     AvailableSlotResponse,
     BookingCancelRequest,
     BookingCreateRequest,
+    BookingCustomScheduleRequest,
     BookingListResponse,
+    BookingRescheduleRequest,
     BookingResponse,
     BookingStatusUpdateRequest,
     VisitSlotCreateRequest,
@@ -640,3 +642,179 @@ def update_booking_status(
     refreshed = repository.get_booking_by_id(session, booking.id)
     assert refreshed is not None
     return BookingResponse.from_orm_model(refreshed)
+
+
+def reschedule_booking(
+    session: Session,
+    *,
+    actor: User,
+    booking_id: UUID,
+    payload: BookingRescheduleRequest,
+) -> BookingResponse:
+    """Reschedule an active site visit booking to a new available slot."""
+
+    booking = _get_visible_booking(
+        session, actor=actor, booking_id=booking_id, for_update=True
+    )
+
+    if booking.status in (
+        BookingStatus.CANCELLED.value,
+        BookingStatus.COMPLETED.value,
+        BookingStatus.NO_SHOW.value,
+    ):
+        raise InvalidBookingStatusTransitionError(booking.status, "RESCHEDULED")
+
+    now = utcnow()
+    if payload.slot_id is not None:
+        if payload.slot_id == booking.slot_id:
+            return BookingResponse.from_orm_model(booking)
+
+        new_slot = repository.get_slot_by_id(session, payload.slot_id, for_update=True)
+        if new_slot is None:
+            raise SlotNotFoundError()
+
+        if new_slot.project_id != booking.project_id:
+            raise MismatchedProjectError()
+
+        if new_slot.project.status != ProjectStatus.ACTIVE.value:
+            raise ProjectNotActiveError()
+
+        if not new_slot.is_active:
+            raise SlotInactiveError()
+
+        if _as_utc(new_slot.start_time) <= now:
+            raise PastSlotBookingError()
+
+        # Capacity check on new slot
+        current_booked = repository.count_active_slot_bookings(session, new_slot.id)
+        if current_booked >= new_slot.capacity:
+            raise SlotCapacityExceededError()
+    else:
+        # Custom time slot reschedule
+        start_utc = _as_utc(payload.start_time)  # type: ignore[arg-type]
+        end_utc = _as_utc(payload.end_time)      # type: ignore[arg-type]
+        if start_utc <= now:
+            raise PastSlotBookingError()
+
+        existing_slots = repository.list_slots(
+            session,
+            offset=0,
+            limit=50,
+            project_id=booking.project_id,
+            is_active=True,
+            from_time=start_utc,
+            to_time=end_utc,
+        )
+        matching_slot = next(
+            (s for s in existing_slots if _as_utc(s.start_time) == start_utc and _as_utc(s.end_time) == end_utc),
+            None,
+        )
+        if matching_slot:
+            current_booked = repository.count_active_slot_bookings(session, matching_slot.id)
+            if current_booked >= matching_slot.capacity:
+                matching_slot.capacity = current_booked + 1
+            new_slot = matching_slot
+        else:
+            new_slot = VisitSlot(
+                project_id=booking.project_id,
+                start_time=start_utc,
+                end_time=end_utc,
+                capacity=1,
+                notes=f"Dedicated slot scheduled by {actor.full_name}",
+                is_active=True,
+            )
+            session.add(new_slot)
+            session.flush()
+
+    booking.slot_id = new_slot.id
+    booking.updated_at = now
+    if payload.notes:
+        booking.notes = payload.notes
+
+    try:
+        from app.modules.notifications.service import notify_booking_confirmed
+
+        notify_booking_confirmed(session, booking=booking)
+    except Exception as exc:
+        logger.warning("Could not dispatch reschedule notification: %s", exc)
+
+    session.commit()
+    refreshed = repository.get_booking_by_id(session, booking.id)
+    assert refreshed is not None
+    return BookingResponse.from_orm_model(refreshed)
+
+
+def schedule_custom_booking(
+    session: Session,
+    *,
+    actor: User,
+    payload: BookingCustomScheduleRequest,
+) -> BookingResponse:
+    """Schedule a visit at a custom date/time, creating or reusing a slot automatically."""
+
+    now = utcnow()
+    start_utc = _as_utc(payload.start_time)
+    end_utc = _as_utc(payload.end_time)
+
+    if start_utc <= now:
+        raise PastSlotBookingError()
+
+    lead = get_lead_by_id(session, payload.lead_id)
+    if lead is None:
+        raise LeadNotFoundError()
+
+    if not lead.consent_to_contact:
+        raise BookingConsentRequiredError()
+
+    if actor.role.name == RoleName.SALES_EXECUTIVE.value:
+        if (
+            lead.current_assignment is None
+            or lead.current_assignment.executive_id != actor.id
+        ):
+            raise BookingOwnershipError(
+                "Sales executives can only book site visits for assigned leads."
+            )
+        buyer_user = (
+            users_repository.get_user_by_email(session, lead.email)
+            if lead.email
+            else None
+        )
+        buyer_id = buyer_user.id if buyer_user is not None else actor.id
+    elif _is_admin(actor):
+        buyer_user = (
+            users_repository.get_user_by_email(session, lead.email)
+            if lead.email
+            else None
+        )
+        buyer_id = buyer_user.id if buyer_user is not None else actor.id
+    else:
+        raise InsufficientPermissionsError()
+
+    project = get_project_by_id(session, lead.project_id)
+    if project is None or project.status != ProjectStatus.ACTIVE.value:
+        raise ProjectNotActiveError()
+
+    # Find existing matching slot or create one
+    slot = repository.get_slot_by_range(
+        session, project_id=lead.project_id, start_time=start_utc, end_time=end_utc
+    )
+    if slot is None:
+        slot = VisitSlot(
+            project_id=lead.project_id,
+            start_time=start_utc,
+            end_time=end_utc,
+            capacity=5,
+            is_active=True,
+            notes="Created for executive scheduled visit",
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(slot)
+        session.flush()
+
+    create_req = BookingCreateRequest(
+        slot_id=slot.id,
+        lead_id=lead.id,
+        notes=payload.notes,
+    )
+    return create_booking(session, actor=actor, payload=create_req)
