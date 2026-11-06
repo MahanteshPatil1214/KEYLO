@@ -1,4 +1,5 @@
 import { spawn } from 'child_process';
+import crypto from 'crypto';
 import puppeteer from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
@@ -92,8 +93,11 @@ async function run() {
     await page.setViewport({ width: 1440, height: 900 });
     await page.goto('http://127.0.0.1:5173/login', { waitUntil: 'networkidle0' });
 
-    await page.type('input[type="email"], input[name="email"]', 'admin.demo@keylo.com');
-    await page.type('input[type="password"], input[name="password"]', 'KeyloAdmin!2026#');
+    const adminEmail = process.env.KEYLO_ADMIN_EMAIL || 'admin.demo@keylo.com';
+    const adminPassword = process.env.KEYLO_ADMIN_PASSWORD || 'KeyloAdmin!2026#';
+
+    await page.type('input[type="email"], input[name="email"]', adminEmail);
+    await page.type('input[type="password"], input[name="password"]', adminPassword);
     await page.click('button[type="submit"]');
 
     await page.waitForFunction(() => window.location.pathname.startsWith('/admin'), { timeout: 10000 });
@@ -153,10 +157,14 @@ async function run() {
       });
       console.log('Saved screenshot: admin-users-create-modal.png');
 
+      // Generate dynamic test credentials at runtime
+      const dynamicUserPassword = `Aa1!${crypto.randomBytes(8).toString('hex')}`;
+      const dynamicUserEmail = `maya.sen.${Date.now()}@keylo.com`;
+
       // Fill form
       await page.type('#create-fullname', 'Maya Sen');
-      await page.type('#create-email', 'maya.sales@keylo.com');
-      await page.type('#create-password', 'KeyloSales!2026#');
+      await page.type('#create-email', dynamicUserEmail);
+      await page.type('#create-password', dynamicUserPassword);
       await page.type('#create-phone', '+91 97777 88888');
 
       // Submit

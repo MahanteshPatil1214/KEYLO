@@ -134,3 +134,4 @@ export async function updateUserStatus(
     body: JSON.stringify({ is_active: isActive }),
   });
 }
+

@@ -224,7 +224,7 @@ def test_admin_can_create_user_with_role(
     payload = {
         "full_name": "New Sales Lead",
         "email": "new.sales@keylo.com",
-        "password": "SalesPassword123!",
+        "password": TEST_PASSWORD,
         "phone": "+91 91234 56789",
         "role": RoleName.SALES_EXECUTIVE.value,
         "is_active": True,
@@ -242,7 +242,7 @@ def test_admin_can_create_user_with_role(
     # Verify newly created user can log in
     login_resp = client.post(
         "/api/v1/auth/login",
-        json={"email": "new.sales@keylo.com", "password": "SalesPassword123!"},
+        json={"email": "new.sales@keylo.com", "password": TEST_PASSWORD},
     )
     assert login_resp.status_code == 200
     assert "access_token" in login_resp.json()
@@ -259,7 +259,7 @@ def test_non_admin_cannot_create_user(
     payload = {
         "full_name": "Unauthorized User",
         "email": "unauth@example.com",
-        "password": "Password123!",
+        "password": TEST_PASSWORD,
         "role": RoleName.BUYER.value,
     }
     response = client.post("/api/v1/users", json=payload, headers=headers)
@@ -278,7 +278,7 @@ def test_admin_cannot_create_user_with_duplicate_email(
     payload = {
         "full_name": "Duplicate User",
         "email": "existing-user@example.com",
-        "password": "Password123!",
+        "password": TEST_PASSWORD,
         "role": RoleName.BUYER.value,
     }
     response = client.post("/api/v1/users", json=payload, headers=headers)
