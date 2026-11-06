@@ -19,6 +19,7 @@ from app.modules.projects.schemas import (
     FactVersionListResponse,
     ProjectCreateRequest,
     ProjectListResponse,
+    ProjectMetricsResponse,
     ProjectResponse,
     ProjectUpdateRequest,
 )
@@ -28,6 +29,7 @@ from app.modules.projects.service import (
     create_project,
     get_fact,
     get_project,
+    get_project_metrics_summary,
     list_fact_versions,
     list_facts,
     list_projects,
@@ -71,6 +73,7 @@ def list_projects_endpoint(
         ProjectStatus | None,
         Query(alias="status", description="Admin-only lifecycle filter."),
     ] = None,
+    search: Annotated[str | None, Query(max_length=100)] = None,
 ) -> ProjectListResponse:
     """List active projects for buyers/sales and all projects for admins."""
 
@@ -80,7 +83,23 @@ def list_projects_endpoint(
         page=page,
         page_size=page_size,
         status=project_status,
+        search=search,
     )
+
+
+@router.get(
+    "/projects/metrics",
+    response_model=ProjectMetricsResponse,
+    tags=["projects"],
+    summary="Get project and fact metrics (admin only)",
+)
+def get_project_metrics_endpoint(
+    admin: AdminUser,
+    db: Annotated[Session, Depends(get_db)],
+) -> ProjectMetricsResponse:
+    """Return aggregate project and fact sheet metrics. Requires the ADMIN role."""
+
+    return get_project_metrics_summary(db, actor=admin)
 
 
 @router.get(

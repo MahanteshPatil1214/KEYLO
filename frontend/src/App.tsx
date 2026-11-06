@@ -21,6 +21,7 @@ import { RegisterPage } from "./pages/RegisterPage";
 import { AdminAuthGuard } from "./admin/AdminAuthGuard";
 import { AdminLayout } from "./admin/AdminLayout";
 import { UserManagementPage } from "./admin/UserManagementPage";
+import { ProjectManagementPage } from "./admin/ProjectManagementPage";
 import { BuyerAuthGuard } from "./buyer/BuyerAuthGuard";
 import { BuyerLayout } from "./buyer/BuyerLayout";
 import { BuyerDashboardPage } from "./buyer/BuyerDashboardPage";
@@ -97,6 +98,7 @@ export default function App() {
             <Route element={<AdminLayout />}>
               <Route index element={<UserManagementPage />} />
               <Route path="users" element={<UserManagementPage />} />
+              <Route path="projects" element={<ProjectManagementPage />} />
               <Route path="*" element={<Navigate to="/admin" replace />} />
             </Route>
           </Route>

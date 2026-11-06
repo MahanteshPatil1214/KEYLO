@@ -129,6 +129,18 @@ class ProjectListResponse(BaseModel):
     pages: int
 
 
+class ProjectMetricsResponse(BaseModel):
+    """Aggregate counts for project and fact sheet management."""
+
+    total_projects: int
+    active_projects: int
+    draft_projects: int
+    inactive_projects: int
+    total_facts: int
+    approved_facts: int
+    draft_facts: int
+
+
 class FactCreateRequest(BaseModel):
     """Admin input for creating a draft fact."""
 

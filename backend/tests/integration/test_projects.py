@@ -257,3 +257,40 @@ def test_project_payload_validation_and_missing_records(
     assert forbidden_field.status_code == 422
     assert invalid_status.status_code == 422
     assert missing.status_code == 404
+
+
+def test_admin_get_project_metrics(
+    client: TestClient,
+    user_factory: Callable[..., User],
+    auth_headers: Callable[..., dict[str, str]],
+) -> None:
+    admin = user_factory(role=RoleName.ADMIN)
+    headers = auth_headers(admin.email)
+
+    create_project(client, headers, name="Metrics Project 1", status="DRAFT")
+    create_project(client, headers, name="Metrics Project 2", status="ACTIVE")
+
+    metrics_resp = client.get("/api/v1/projects/metrics", headers=headers)
+    assert metrics_resp.status_code == 200
+    data = metrics_resp.json()
+    assert data["total_projects"] >= 2
+    assert data["draft_projects"] >= 1
+    assert data["active_projects"] >= 1
+
+
+def test_admin_can_search_projects(
+    client: TestClient,
+    user_factory: Callable[..., User],
+    auth_headers: Callable[..., dict[str, str]],
+) -> None:
+    admin = user_factory(role=RoleName.ADMIN)
+    headers = auth_headers(admin.email)
+
+    create_project(client, headers, name="Unique Pearl Heights", location="Bangalore, Karnataka")
+    create_project(client, headers, name="Emerald Villa Park", location="Hyderabad, Telangana")
+
+    resp = client.get("/api/v1/projects?search=Pearl", headers=headers)
+    assert resp.status_code == 200
+    results = resp.json()["items"]
+    assert any(p["name"] == "Unique Pearl Heights" for p in results)
+    assert not any(p["name"] == "Emerald Villa Park" for p in results)

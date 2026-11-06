@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.modules.projects.models import (
@@ -48,12 +48,26 @@ def get_project_by_slug(session: Session, slug: str) -> Project | None:
     return session.scalar(select(Project).where(Project.slug == slug))
 
 
-def count_projects(session: Session, *, status: str | None = None) -> int:
-    """Count projects, optionally constrained to one lifecycle state."""
+def count_projects(
+    session: Session,
+    *,
+    status: str | None = None,
+    search: str | None = None,
+) -> int:
+    """Count projects, optionally constrained to one lifecycle state and search query."""
 
     statement = select(func.count()).select_from(Project)
     if status is not None:
         statement = statement.where(Project.status == status)
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        statement = statement.where(
+            or_(
+                Project.name.ilike(term),
+                Project.location.ilike(term),
+                Project.rera_number.ilike(term),
+            )
+        )
     return session.scalar(statement) or 0
 
 
@@ -63,18 +77,86 @@ def list_projects(
     offset: int,
     limit: int,
     status: str | None = None,
+    search: str | None = None,
 ) -> list[Project]:
-    """Return a stable page of projects."""
+    """Return a stable page of projects matching filters."""
 
     statement = select(Project)
     if status is not None:
         statement = statement.where(Project.status == status)
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        statement = statement.where(
+            or_(
+                Project.name.ilike(term),
+                Project.location.ilike(term),
+                Project.rera_number.ilike(term),
+            )
+        )
     statement = (
         statement.order_by(Project.created_at.desc(), Project.id)
         .offset(offset)
         .limit(limit)
     )
     return list(session.scalars(statement).all())
+
+
+def get_project_metrics(session: Session) -> dict[str, int]:
+    """Compute aggregate counts for projects and facts."""
+
+    total_p = session.scalar(select(func.count(Project.id))) or 0
+    active_p = (
+        session.scalar(
+            select(func.count(Project.id)).where(
+                Project.status == ProjectStatus.ACTIVE.value
+            )
+        )
+        or 0
+    )
+    draft_p = (
+        session.scalar(
+            select(func.count(Project.id)).where(
+                Project.status == ProjectStatus.DRAFT.value
+            )
+        )
+        or 0
+    )
+    inactive_p = (
+        session.scalar(
+            select(func.count(Project.id)).where(
+                Project.status == ProjectStatus.INACTIVE.value
+            )
+        )
+        or 0
+    )
+
+    total_f = session.scalar(select(func.count(ProjectFact.id))) or 0
+    approved_f = (
+        session.scalar(
+            select(func.count(ProjectFact.id)).where(
+                ProjectFact.status == FactStatus.APPROVED.value
+            )
+        )
+        or 0
+    )
+    draft_f = (
+        session.scalar(
+            select(func.count(ProjectFact.id)).where(
+                ProjectFact.status == FactStatus.DRAFT.value
+            )
+        )
+        or 0
+    )
+
+    return {
+        "total_projects": total_p,
+        "active_projects": active_p,
+        "draft_projects": draft_p,
+        "inactive_projects": inactive_p,
+        "total_facts": total_f,
+        "approved_facts": approved_f,
+        "draft_facts": draft_f,
+    }
 
 
 def get_fact_by_id(

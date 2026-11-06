@@ -34,6 +34,7 @@ from app.modules.projects.schemas import (
     PendingFactChanges,
     ProjectCreateRequest,
     ProjectListResponse,
+    ProjectMetricsResponse,
     ProjectResponse,
     ProjectUpdateRequest,
     normalize_category,
@@ -221,6 +222,7 @@ def list_projects(
     page: int,
     page_size: int,
     status: ProjectStatus | None = None,
+    search: str | None = None,
 ) -> ProjectListResponse:
     """Return a page of projects visible to the caller."""
 
@@ -229,12 +231,14 @@ def list_projects(
     else:
         status_value = ProjectStatus.ACTIVE.value
 
-    total = repository.count_projects(session, status=status_value)
+    clean_search = search.strip() if search and search.strip() else None
+    total = repository.count_projects(session, status=status_value, search=clean_search)
     items = repository.list_projects(
         session,
         offset=(page - 1) * page_size,
         limit=page_size,
         status=status_value,
+        search=clean_search,
     )
     return ProjectListResponse(
         items=[_project_response(project) for project in items],
@@ -243,6 +247,18 @@ def list_projects(
         page_size=page_size,
         pages=_pages(total, page_size),
     )
+
+
+def get_project_metrics_summary(
+    session: Session,
+    *,
+    actor: User,
+) -> ProjectMetricsResponse:
+    """Return aggregate project and fact sheet metrics. Requires the ADMIN role."""
+
+    _require_admin(actor)
+    metrics = repository.get_project_metrics(session)
+    return ProjectMetricsResponse(**metrics)
 
 
 def update_project(

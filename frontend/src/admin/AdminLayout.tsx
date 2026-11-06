@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
+  Building2,
   LogOut,
   Menu,
   ShieldCheck,
@@ -55,6 +56,19 @@ export function AdminLayout() {
               >
                 <Users className="size-4" />
                 <span>User Management</span>
+              </NavLink>
+              <NavLink
+                to="/admin/projects"
+                className={({ isActive }) =>
+                  `inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors ${
+                    isActive
+                      ? "bg-charcoal text-ivory shadow-sm"
+                      : "text-charcoal/70 hover:bg-charcoal/5 hover:text-charcoal"
+                  }`
+                }
+              >
+                <Building2 className="size-4" />
+                <span>Projects & Fact Sheets</span>
               </NavLink>
             </nav>
           </div>
@@ -124,6 +138,14 @@ export function AdminLayout() {
               >
                 <Users className="size-4 text-charcoal" />
                 <span>User Management</span>
+              </Link>
+              <Link
+                to="/admin/projects"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-charcoal/70 hover:bg-charcoal/5 hover:text-charcoal"
+              >
+                <Building2 className="size-4 text-charcoal" />
+                <span>Projects & Fact Sheets</span>
               </Link>
               <button
                 type="button"

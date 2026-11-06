@@ -8,6 +8,20 @@ import type {
   UserListResponse,
   UserMetrics,
 } from "./adminModel";
+import type {
+  AdminFactStatus,
+  AdminProjectStatus,
+  CreateFactPayload,
+  CreateProjectPayload,
+  FactItem,
+  FactListResponse,
+  FactVersionListResponse,
+  ProjectItem,
+  ProjectListResponse,
+  ProjectMetrics,
+  UpdateFactPayload,
+  UpdateProjectPayload,
+} from "./projectModel";
 
 async function authenticatedRequest<T>(
   path: string,
@@ -133,5 +147,125 @@ export async function updateUserStatus(
     method: "PATCH",
     body: JSON.stringify({ is_active: isActive }),
   });
+}
+
+// ---------------------------------------------------------------------------
+// Projects & Fact Sheets Endpoints
+// ---------------------------------------------------------------------------
+
+export async function fetchProjectMetrics(): Promise<ProjectMetrics> {
+  return authenticatedRequest<ProjectMetrics>("/projects/metrics");
+}
+
+export type FetchProjectsParams = {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  status?: AdminProjectStatus | "ALL";
+};
+
+export async function fetchProjects(
+  params: FetchProjectsParams = {},
+): Promise<ProjectListResponse> {
+  const query = new URLSearchParams();
+  if (params.page) query.set("page", String(params.page));
+  if (params.pageSize) query.set("page_size", String(params.pageSize));
+  if (params.search?.trim()) query.set("search", params.search.trim());
+  if (params.status && params.status !== "ALL") query.set("status", params.status);
+
+  const queryString = query.toString();
+  return authenticatedRequest<ProjectListResponse>(
+    queryString ? `/projects?${queryString}` : "/projects",
+  );
+}
+
+export async function fetchProject(projectId: string): Promise<ProjectItem> {
+  return authenticatedRequest<ProjectItem>(`/projects/${projectId}`);
+}
+
+export async function createProject(
+  payload: CreateProjectPayload,
+): Promise<ProjectItem> {
+  return authenticatedRequest<ProjectItem>("/projects", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateProject(
+  projectId: string,
+  payload: UpdateProjectPayload,
+): Promise<ProjectItem> {
+  return authenticatedRequest<ProjectItem>(`/projects/${projectId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export type FetchFactsParams = {
+  page?: number;
+  pageSize?: number;
+  status?: AdminFactStatus | "ALL";
+  category?: string;
+};
+
+export async function fetchProjectFacts(
+  projectId: string,
+  params: FetchFactsParams = {},
+): Promise<FactListResponse> {
+  const query = new URLSearchParams();
+  if (params.page) query.set("page", String(params.page));
+  if (params.pageSize) query.set("page_size", String(params.pageSize));
+  if (params.status && params.status !== "ALL") query.set("status", params.status);
+  if (params.category && params.category !== "ALL") query.set("category", params.category);
+
+  const queryString = query.toString();
+  return authenticatedRequest<FactListResponse>(
+    queryString
+      ? `/projects/${projectId}/facts?${queryString}`
+      : `/projects/${projectId}/facts`,
+  );
+}
+
+export async function createFact(
+  projectId: string,
+  payload: CreateFactPayload,
+): Promise<FactItem> {
+  return authenticatedRequest<FactItem>(`/projects/${projectId}/facts`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateFact(
+  factId: string,
+  payload: UpdateFactPayload,
+): Promise<FactItem> {
+  return authenticatedRequest<FactItem>(`/facts/${factId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function approveFact(factId: string): Promise<FactItem> {
+  return authenticatedRequest<FactItem>(`/facts/${factId}/approve`, {
+    method: "POST",
+  });
+}
+
+export async function rejectFact(factId: string): Promise<FactItem> {
+  return authenticatedRequest<FactItem>(`/facts/${factId}/reject`, {
+    method: "POST",
+  });
+}
+
+export async function fetchFactVersions(
+  factId: string,
+  page: number = 1,
+  pageSize: number = 20,
+): Promise<FactVersionListResponse> {
+  return authenticatedRequest<FactVersionListResponse>(
+    `/facts/${factId}/versions?page=${page}&page_size=${pageSize}`,
+  );
 }
 
