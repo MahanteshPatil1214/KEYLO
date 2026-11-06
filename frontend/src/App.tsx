@@ -32,8 +32,8 @@ import { SalesDashboardPage } from "./sales/SalesDashboardPage";
 import { SalesLeadsPage } from "./sales/SalesLeadsPage";
 import { SalesNotificationsPage } from "./sales/SalesNotificationsPage";
 import { SalesProfilePage } from "./sales/SalesProfilePage";
+import { SalesConversationsPage } from "./sales/SalesConversationsPage";
 import {
-  SalesConversationsPage,
   SalesFollowUpsPage,
   SalesVisitsPage,
 } from "./sales/SalesPlaceholderPages";

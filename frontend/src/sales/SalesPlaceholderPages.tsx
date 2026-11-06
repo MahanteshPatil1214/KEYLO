@@ -1,21 +1,8 @@
 import {
   CalendarDays,
   ListChecks,
-  MessageSquare,
 } from "lucide-react";
 import { SalesModulePlaceholder } from "./SalesModulePlaceholder";
-
-export function SalesConversationsPage() {
-  return (
-    <SalesModulePlaceholder
-      eyebrow="Buyer dialogue"
-      title="Conversations"
-      moduleName="Conversation"
-      description="Buyer conversations and handoff context will be managed from this workspace in the next module."
-      icon={MessageSquare}
-    />
-  );
-}
 
 export function SalesVisitsPage() {
   return (

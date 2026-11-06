@@ -100,6 +100,7 @@ function itemForPath(pathname: string): NavItem | undefined {
 export function SalesLayout() {
   const { user } = useSalesUser();
   const location = useLocation();
+  const isConversations = location.pathname.startsWith("/sales/conversations");
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const shouldReduceMotion = useReducedMotion();
@@ -641,13 +642,18 @@ export function SalesLayout() {
         <main
           id="sales-main"
           tabIndex={-1}
-          className="mx-auto w-full max-w-[1500px] px-4 pt-6 pb-28 outline-none sm:px-6 sm:pt-8 lg:px-8 lg:pt-10 lg:pb-14"
+          className={
+            isConversations
+              ? "h-[calc(100svh-4rem)] lg:h-[calc(100svh-5rem)] overflow-hidden pb-16 lg:pb-0"
+              : "mx-auto w-full max-w-[1500px] px-4 pt-6 pb-28 outline-none sm:px-6 sm:pt-8 lg:px-8 lg:pt-10 lg:pb-14"
+          }
         >
           <motion.div
             key={location.pathname}
             initial={shouldReduceMotion ? false : { opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: shouldReduceMotion ? 0 : 0.22, ease: "easeOut" }}
+            className={isConversations ? "h-full w-full p-0" : undefined}
           >
             <Outlet />
           </motion.div>

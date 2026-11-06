@@ -733,3 +733,44 @@ export function markAllNotificationsAsRead(): Promise<MarkAllReadResponse> {
     { method: "POST" },
   );
 }
+
+// ─── Conversation mutations ───────────────────────────────────────────────────
+
+export function sendSalesMessage(
+  conversationId: string,
+  content: string,
+): Promise<SalesMessage> {
+  return authenticatedRequest<SalesMessage>(
+    `/conversations/${conversationId}/messages`,
+    {
+      method: "POST",
+      body: JSON.stringify({ content, sender_type: "SALES_EXECUTIVE" }),
+    },
+  );
+}
+
+export function updateConversationStatus(
+  conversationId: string,
+  status: ConversationStatus,
+): Promise<SalesConversation> {
+  return authenticatedRequest<SalesConversation>(
+    `/conversations/${conversationId}/status`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    },
+  );
+}
+
+// ─── Handoff mutations ────────────────────────────────────────────────────────
+
+export function updateHandoffStatus(
+  handoffId: string,
+  status: HandoffStatus,
+  resolutionNotes?: string,
+): Promise<SalesHandoff> {
+  return authenticatedRequest<SalesHandoff>(`/handoffs/${handoffId}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status, resolution_notes: resolutionNotes }),
+  });
+}
