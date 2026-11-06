@@ -211,3 +211,131 @@ def test_admin_listing_rejects_invalid_page_size(
     )
 
     assert response.status_code == 422
+
+
+def test_admin_can_create_user_with_role(
+    client: TestClient,
+    user_factory: Callable[..., User],
+    auth_headers: Callable[..., dict[str, str]],
+) -> None:
+    admin = user_factory(role=RoleName.ADMIN, email="creator-admin@example.com")
+    headers = auth_headers(admin.email)
+
+    payload = {
+        "full_name": "New Sales Lead",
+        "email": "new.sales@keylo.com",
+        "password": "SalesPassword123!",
+        "phone": "+91 91234 56789",
+        "role": RoleName.SALES_EXECUTIVE.value,
+        "is_active": True,
+    }
+
+    response = client.post("/api/v1/users", json=payload, headers=headers)
+    assert response.status_code == 201
+    data = response.json()
+    assert data["full_name"] == "New Sales Lead"
+    assert data["email"] == "new.sales@keylo.com"
+    assert data["role"]["name"] == RoleName.SALES_EXECUTIVE.value
+    assert data["is_active"] is True
+    assert "password" not in response.text
+
+    # Verify newly created user can log in
+    login_resp = client.post(
+        "/api/v1/auth/login",
+        json={"email": "new.sales@keylo.com", "password": "SalesPassword123!"},
+    )
+    assert login_resp.status_code == 200
+    assert "access_token" in login_resp.json()
+
+
+def test_non_admin_cannot_create_user(
+    client: TestClient,
+    user_factory: Callable[..., User],
+    auth_headers: Callable[..., dict[str, str]],
+) -> None:
+    sales = user_factory(role=RoleName.SALES_EXECUTIVE, email="sales-create-blocked@example.com")
+    headers = auth_headers(sales.email)
+
+    payload = {
+        "full_name": "Unauthorized User",
+        "email": "unauth@example.com",
+        "password": "Password123!",
+        "role": RoleName.BUYER.value,
+    }
+    response = client.post("/api/v1/users", json=payload, headers=headers)
+    assert response.status_code == 403
+
+
+def test_admin_cannot_create_user_with_duplicate_email(
+    client: TestClient,
+    user_factory: Callable[..., User],
+    auth_headers: Callable[..., dict[str, str]],
+) -> None:
+    admin = user_factory(role=RoleName.ADMIN, email="dup-admin@example.com")
+    user_factory(role=RoleName.BUYER, email="existing-user@example.com")
+    headers = auth_headers(admin.email)
+
+    payload = {
+        "full_name": "Duplicate User",
+        "email": "existing-user@example.com",
+        "password": "Password123!",
+        "role": RoleName.BUYER.value,
+    }
+    response = client.post("/api/v1/users", json=payload, headers=headers)
+    assert response.status_code == 409
+
+
+def test_admin_list_users_filters(
+    client: TestClient,
+    user_factory: Callable[..., User],
+    auth_headers: Callable[..., dict[str, str]],
+) -> None:
+    admin = user_factory(role=RoleName.ADMIN, email="filter-admin@example.com", full_name="Admin Boss")
+    user_factory(role=RoleName.SALES_EXECUTIVE, email="rohit.sales@keylo.com", full_name="Rohit Sharma")
+    user_factory(role=RoleName.BUYER, email="priya.buyer@example.com", full_name="Priya Patel", is_active=False)
+
+    headers = auth_headers(admin.email)
+
+    # Search filter
+    search_resp = client.get("/api/v1/users?search=Rohit", headers=headers)
+    assert search_resp.status_code == 200
+    search_data = search_resp.json()
+    assert search_data["total"] == 1
+    assert search_data["items"][0]["full_name"] == "Rohit Sharma"
+
+    # Role filter
+    role_resp = client.get("/api/v1/users?role=SALES_EXECUTIVE", headers=headers)
+    assert role_resp.status_code == 200
+    role_data = role_resp.json()
+    assert any(u["email"] == "rohit.sales@keylo.com" for u in role_data["items"])
+    assert all(u["role"]["name"] == "SALES_EXECUTIVE" for u in role_data["items"])
+
+    # Inactive status filter
+    inactive_resp = client.get("/api/v1/users?is_active=false", headers=headers)
+    assert inactive_resp.status_code == 200
+    inactive_data = inactive_resp.json()
+    assert any(u["email"] == "priya.buyer@example.com" for u in inactive_data["items"])
+    assert all(u["is_active"] is False for u in inactive_data["items"])
+
+
+def test_admin_get_user_metrics(
+    client: TestClient,
+    user_factory: Callable[..., User],
+    auth_headers: Callable[..., dict[str, str]],
+) -> None:
+    admin = user_factory(role=RoleName.ADMIN, email="metrics-admin@example.com")
+    user_factory(role=RoleName.SALES_EXECUTIVE, email="metrics-sales@example.com")
+    user_factory(role=RoleName.BUYER, email="metrics-buyer1@example.com", is_active=True)
+    user_factory(role=RoleName.BUYER, email="metrics-buyer2@example.com", is_active=False)
+
+    headers = auth_headers(admin.email)
+    metrics_resp = client.get("/api/v1/users/metrics", headers=headers)
+    assert metrics_resp.status_code == 200
+    metrics = metrics_resp.json()
+
+    assert metrics["total"] >= 4
+    assert metrics["active"] >= 3
+    assert metrics["deactivated"] >= 1
+    assert metrics["admins"] >= 1
+    assert metrics["sales_executives"] >= 1
+    assert metrics["buyers"] >= 2

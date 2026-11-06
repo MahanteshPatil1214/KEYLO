@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from app.modules.users.models import RoleName
 
@@ -91,3 +91,45 @@ class UserStatusUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     is_active: bool
+
+
+class UserCreateRequest(BaseModel):
+    """Administrator request to provision a user account."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    full_name: str = Field(min_length=2, max_length=255)
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+    phone: str | None = Field(default=None, max_length=32)
+    role: RoleName = RoleName.BUYER
+    is_active: bool = True
+
+    @field_validator("full_name", mode="before")
+    @classmethod
+    def _strip_full_name(cls, value: object) -> object:
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                raise ValueError("full_name cannot be empty.")
+            return stripped
+        return value
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def _normalize_phone(cls, value: object) -> object:
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+        return value
+
+
+class UserMetricsResponse(BaseModel):
+    """Aggregate user summary metrics for administrators."""
+
+    total: int
+    active: int
+    deactivated: int
+    admins: int
+    sales_executives: int
+    buyers: int

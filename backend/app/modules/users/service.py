@@ -17,7 +17,12 @@ from app.modules.users.exceptions import (
     UserNotFoundError,
 )
 from app.modules.users.models import Role, RoleName, User
-from app.modules.users.schemas import UserListResponse, UserUpdateRequest
+from app.modules.users.schemas import (
+    UserCreateRequest,
+    UserListResponse,
+    UserMetricsResponse,
+    UserUpdateRequest,
+)
 
 _ROLE_DESCRIPTIONS: dict[RoleName, str] = {
     RoleName.BUYER: "Buyer account",
@@ -92,15 +97,26 @@ def list_users(
     actor: User,
     page: int,
     page_size: int,
+    search: str | None = None,
+    role_name: RoleName | str | None = None,
+    is_active: bool | None = None,
 ) -> UserListResponse:
     """Return a paginated user listing for administrators."""
 
     _require_admin(actor)
-    total = repository.count_users(session)
+    total = repository.count_users(
+        session,
+        search=search,
+        role_name=role_name,
+        is_active=is_active,
+    )
     items = repository.list_users(
         session,
         offset=(page - 1) * page_size,
         limit=page_size,
+        search=search,
+        role_name=role_name,
+        is_active=is_active,
     )
     pages = (total + page_size - 1) // page_size if total else 0
     return UserListResponse(
@@ -109,6 +125,40 @@ def list_users(
         page=page,
         page_size=page_size,
         pages=pages,
+    )
+
+
+def get_user_metrics_summary(
+    session: Session,
+    *,
+    actor: User,
+) -> UserMetricsResponse:
+    """Compute aggregate user metrics for administrators."""
+
+    _require_admin(actor)
+    metrics = repository.get_user_metrics(session)
+    return UserMetricsResponse(**metrics)
+
+
+def create_user_by_admin(
+    session: Session,
+    *,
+    actor: User,
+    payload: UserCreateRequest,
+) -> User:
+    """Provision a user account with an explicit role. Requires the ADMIN role."""
+
+    _require_admin(actor)
+    from app.modules.auth.service import create_user_with_role
+
+    return create_user_with_role(
+        session,
+        full_name=payload.full_name,
+        email=str(payload.email),
+        password=payload.password,
+        phone=payload.phone,
+        role_name=payload.role,
+        is_active=payload.is_active,
     )
 
 

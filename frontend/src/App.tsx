@@ -18,7 +18,9 @@ import { Workflow } from "./components/Workflow";
 import { LoginPage } from "./pages/LoginPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { RegisterPage } from "./pages/RegisterPage";
-import { WorkspacePage } from "./pages/WorkspacePage";
+import { AdminAuthGuard } from "./admin/AdminAuthGuard";
+import { AdminLayout } from "./admin/AdminLayout";
+import { UserManagementPage } from "./admin/UserManagementPage";
 import { BuyerAuthGuard } from "./buyer/BuyerAuthGuard";
 import { BuyerLayout } from "./buyer/BuyerLayout";
 import { BuyerDashboardPage } from "./buyer/BuyerDashboardPage";
@@ -91,10 +93,13 @@ export default function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
-          <Route
-            path="/admin"
-            element={<WorkspacePage expectedRole="ADMIN" />}
-          />
+          <Route path="/admin" element={<AdminAuthGuard />}>
+            <Route element={<AdminLayout />}>
+              <Route index element={<UserManagementPage />} />
+              <Route path="users" element={<UserManagementPage />} />
+              <Route path="*" element={<Navigate to="/admin" replace />} />
+            </Route>
+          </Route>
           <Route path="/sales" element={<SalesAuthGuard />}>
             <Route element={<SalesLayout />}>
               <Route index element={<SalesDashboardPage />} />

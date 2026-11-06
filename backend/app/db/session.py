@@ -10,16 +10,23 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.core.config import get_settings
 
 _settings = get_settings()
+_db_url = _settings.database_url.get_secret_value()
 
 # Small-application pool settings. ``pool_pre_ping`` avoids handing out stale
 # connections after PostgreSQL restarts or network interruptions.
-engine = create_engine(
-    _settings.database_url.get_secret_value(),
-    pool_pre_ping=True,
-    pool_size=5,
-    max_overflow=10,
-    pool_recycle=1800,
-)
+if _db_url.startswith("sqlite"):
+    engine = create_engine(
+        _db_url,
+        connect_args={"check_same_thread": False},
+    )
+else:
+    engine = create_engine(
+        _db_url,
+        pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=10,
+        pool_recycle=1800,
+    )
 
 SessionLocal = sessionmaker(
     bind=engine,
