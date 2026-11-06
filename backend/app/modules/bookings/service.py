@@ -38,6 +38,7 @@ from app.modules.bookings.schemas import (
     BookingCreateRequest,
     BookingCustomScheduleRequest,
     BookingListResponse,
+    BookingMetricsResponse,
     BookingRescheduleRequest,
     BookingResponse,
     BookingStatusUpdateRequest,
@@ -130,7 +131,8 @@ def create_slot(
     session.add(slot)
     session.commit()
     session.refresh(slot)
-    return VisitSlotResponse.model_validate(slot)
+    booked_count = repository.count_active_slot_bookings(session, slot.id)
+    return VisitSlotResponse.from_orm_model(slot, booked_count=booked_count)
 
 
 def update_slot(
@@ -171,7 +173,8 @@ def update_slot(
     slot.updated_at = utcnow()
     session.commit()
     session.refresh(slot)
-    return VisitSlotResponse.model_validate(slot)
+    booked_count = repository.count_active_slot_bookings(session, slot.id)
+    return VisitSlotResponse.from_orm_model(slot, booked_count=booked_count)
 
 
 def deactivate_slot(
@@ -192,7 +195,8 @@ def deactivate_slot(
     slot.updated_at = utcnow()
     session.commit()
     session.refresh(slot)
-    return VisitSlotResponse.model_validate(slot)
+    booked_count = repository.count_active_slot_bookings(session, slot.id)
+    return VisitSlotResponse.from_orm_model(slot, booked_count=booked_count)
 
 
 def get_slot(
@@ -206,7 +210,8 @@ def get_slot(
     slot = repository.get_slot_by_id(session, slot_id)
     if slot is None:
         raise SlotNotFoundError()
-    return VisitSlotResponse.model_validate(slot)
+    booked_count = repository.count_active_slot_bookings(session, slot.id)
+    return VisitSlotResponse.from_orm_model(slot, booked_count=booked_count)
 
 
 def list_slots(
@@ -242,8 +247,14 @@ def list_slots(
         from_time=from_time,
         to_time=to_time,
     )
+    booked_counts = repository.get_slot_booked_counts(session, [s.id for s in items])
     return VisitSlotListResponse(
-        items=[VisitSlotResponse.model_validate(slot) for slot in items],
+        items=[
+            VisitSlotResponse.from_orm_model(
+                slot, booked_count=booked_counts.get(slot.id, 0)
+            )
+            for slot in items
+        ],
         total=total,
         page=page,
         page_size=page_size,
@@ -473,6 +484,18 @@ def get_booking(
     return BookingResponse.from_orm_model(booking)
 
 
+def get_booking_metrics_summary(
+    session: Session,
+    *,
+    actor: User,
+) -> BookingMetricsResponse:
+    """Aggregate metrics across bookings and visit slots for Admin."""
+
+    _require_admin(actor)
+    counts = repository.get_booking_metrics(session)
+    return BookingMetricsResponse(**counts)
+
+
 def list_bookings(
     session: Session,
     *,
@@ -482,6 +505,7 @@ def list_bookings(
     project_id: UUID | None = None,
     lead_id: UUID | None = None,
     status: BookingStatus | None = None,
+    search: str | None = None,
 ) -> BookingListResponse:
     """Return a paginated list of bookings matching caller visibility."""
 
@@ -510,6 +534,7 @@ def list_bookings(
         lead_id=lead_id,
         status=status,
         active_project_only=active_project_only,
+        search=search,
     )
     items = repository.list_bookings(
         session,
@@ -521,6 +546,7 @@ def list_bookings(
         lead_id=lead_id,
         status=status,
         active_project_only=active_project_only,
+        search=search,
     )
     return BookingListResponse(
         items=[BookingResponse.from_orm_model(b) for b in items],

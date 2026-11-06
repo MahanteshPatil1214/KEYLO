@@ -14,9 +14,12 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from datetime import UTC, datetime, timedelta
 from app.db.base import Base
 from app.db.session import engine, SessionLocal
 from app.modules.auth.service import create_user_with_role
+from app.modules.bookings.models import Booking, BookingStatus, VisitSlot
+from app.modules.leads.models import Lead, LeadAssignment, LeadSource, LeadStatus
 from app.modules.projects import repository as project_repo
 from app.modules.projects.models import (
     FactStatus,
@@ -240,6 +243,188 @@ def setup() -> None:
                         )
                     session.commit()
                     print(f"Seeded {len(p_info['facts'])} facts for {project.name}")
+
+        # 5. Seed Leads, Visit Slots, and Site Visit Bookings
+        greenwood = project_repo.get_project_by_slug(session, "greenwood-heights")
+        skyline = project_repo.get_project_by_slug(session, "skyline-waterfront")
+        rohit_exec = repository.get_user_by_email(session, "sales.demo@keylo.com")
+        priya_exec = repository.get_user_by_email(session, "priya.sales@keylo.com")
+        sneha_buyer = repository.get_user_by_email(session, "buyer.demo@keylo.com")
+        ananya_buyer = repository.get_user_by_email(session, "ananya.buyer@keylo.com")
+        vikram_buyer = repository.get_user_by_email(session, "vikram.malhotra@example.com")
+
+        if greenwood and rohit_exec and sneha_buyer:
+            # Seed Leads if not already present
+            lead_sneha = session.query(Lead).filter(Lead.email == sneha_buyer.email).first()
+            if not lead_sneha:
+                lead_sneha = Lead(
+                    full_name=sneha_buyer.full_name,
+                    email=sneha_buyer.email,
+                    phone=sneha_buyer.phone,
+                    project_id=greenwood.id,
+                    source=LeadSource.WEBSITE.value,
+                    status=LeadStatus.VISIT_BOOKED.value,
+                    budget_min=10000000,
+                    budget_max=15000000,
+                    preferred_configuration="3 BHK",
+                    consent_to_contact=True,
+                )
+                session.add(lead_sneha)
+                session.flush()
+                session.add(
+                    LeadAssignment(
+                        lead_id=lead_sneha.id,
+                        executive_id=rohit_exec.id,
+                        assigned_by=admin_user.id if admin_user else rohit_exec.id,
+                    )
+                )
+                session.commit()
+                print("Seeded lead: Sneha Reddy")
+
+            lead_ananya = session.query(Lead).filter(Lead.email == ananya_buyer.email).first() if ananya_buyer else None
+            if not lead_ananya and ananya_buyer:
+                lead_ananya = Lead(
+                    full_name=ananya_buyer.full_name,
+                    email=ananya_buyer.email,
+                    phone=ananya_buyer.phone,
+                    project_id=greenwood.id,
+                    source=LeadSource.PROPERTY_PORTAL.value,
+                    status=LeadStatus.VISITED.value,
+                    budget_min=12000000,
+                    budget_max=18000000,
+                    preferred_configuration="2 BHK",
+                    consent_to_contact=True,
+                )
+                session.add(lead_ananya)
+                session.flush()
+                session.add(
+                    LeadAssignment(
+                        lead_id=lead_ananya.id,
+                        executive_id=rohit_exec.id,
+                        assigned_by=admin_user.id if admin_user else rohit_exec.id,
+                    )
+                )
+                session.commit()
+                print("Seeded lead: Ananya Deshmukh")
+
+            lead_vikram = session.query(Lead).filter(Lead.email == vikram_buyer.email).first() if vikram_buyer and skyline else None
+            if not lead_vikram and vikram_buyer and skyline:
+                lead_vikram = Lead(
+                    full_name=vikram_buyer.full_name,
+                    email=vikram_buyer.email,
+                    phone=vikram_buyer.phone,
+                    project_id=skyline.id,
+                    source=LeadSource.REFERRAL.value,
+                    status=LeadStatus.VISIT_CANCELLED.value,
+                    budget_min=25000000,
+                    budget_max=35000000,
+                    preferred_configuration="4 BHK Sky Villa",
+                    consent_to_contact=True,
+                )
+                session.add(lead_vikram)
+                session.flush()
+                session.add(
+                    LeadAssignment(
+                        lead_id=lead_vikram.id,
+                        executive_id=priya_exec.id if priya_exec else rohit_exec.id,
+                        assigned_by=admin_user.id if admin_user else rohit_exec.id,
+                    )
+                )
+                session.commit()
+                print("Seeded lead: Vikram Malhotra")
+
+            # Seed Visit Slots
+            now = datetime.now(UTC)
+            base_tomorrow = (now + timedelta(days=1)).replace(minute=0, second=0, microsecond=0)
+            base_day_after = (now + timedelta(days=2)).replace(minute=0, second=0, microsecond=0)
+
+            slots_to_seed = [
+                # Greenwood slots
+                (greenwood.id, base_tomorrow.replace(hour=10), base_tomorrow.replace(hour=11), 3, True, "Morning slot at sales gallery"),
+                (greenwood.id, base_tomorrow.replace(hour=14), base_tomorrow.replace(hour=15), 2, True, "Afternoon site tour & model flat"),
+                (greenwood.id, base_tomorrow.replace(hour=16), base_tomorrow.replace(hour=17), 2, False, "Blocked for architectural VIP review"),
+                (greenwood.id, base_day_after.replace(hour=11), base_day_after.replace(hour=12), 4, True, "Weekend buyer preview"),
+            ]
+            if skyline:
+                slots_to_seed.extend([
+                    (skyline.id, base_tomorrow.replace(hour=11), base_tomorrow.replace(hour=12), 2, True, "Waterfront sky lounge tour"),
+                    (skyline.id, base_day_after.replace(hour=15), base_day_after.replace(hour=16), 1, True, "Sample villa walkthrough"),
+                ])
+
+            seeded_slots = []
+            for proj_id, start_t, end_t, cap, active, notes in slots_to_seed:
+                existing_slot = session.query(VisitSlot).filter(
+                    VisitSlot.project_id == proj_id,
+                    VisitSlot.start_time == start_t,
+                    VisitSlot.end_time == end_t,
+                ).first()
+                if not existing_slot:
+                    existing_slot = VisitSlot(
+                        project_id=proj_id,
+                        start_time=start_t,
+                        end_time=end_t,
+                        capacity=cap,
+                        is_active=active,
+                        notes=notes,
+                    )
+                    session.add(existing_slot)
+                    session.flush()
+                seeded_slots.append(existing_slot)
+            session.commit()
+            print(f"Configured {len(seeded_slots)} visit slots")
+
+            # Seed Bookings
+            if len(seeded_slots) >= 3 and lead_sneha:
+                slot_confirmed = seeded_slots[0]
+                slot_completed = seeded_slots[1]
+                slot_cancelled = seeded_slots[-1] if len(seeded_slots) > 4 else seeded_slots[2]
+
+                # Booking 1: Upcoming / Confirmed
+                if not session.query(Booking).filter(Booking.lead_id == lead_sneha.id).first():
+                    b1 = Booking(
+                        slot_id=slot_confirmed.id,
+                        lead_id=lead_sneha.id,
+                        project_id=greenwood.id,
+                        buyer_id=sneha_buyer.id,
+                        executive_id=rohit_exec.id,
+                        status=BookingStatus.CONFIRMED.value,
+                        notes="Buyer requested 3 BHK model flat demonstration and master layout overview.",
+                    )
+                    session.add(b1)
+                    print("Seeded confirmed booking for Sneha Reddy")
+
+                # Booking 2: Completed
+                if lead_ananya and not session.query(Booking).filter(Booking.lead_id == lead_ananya.id).first():
+                    b2 = Booking(
+                        slot_id=slot_completed.id,
+                        lead_id=lead_ananya.id,
+                        project_id=greenwood.id,
+                        buyer_id=ananya_buyer.id,
+                        executive_id=rohit_exec.id,
+                        status=BookingStatus.COMPLETED.value,
+                        notes="Completed tour of central clubhouse and East tower. Client requested cost sheet.",
+                    )
+                    session.add(b2)
+                    print("Seeded completed booking for Ananya Deshmukh")
+
+                # Booking 3: Cancelled
+                if lead_vikram and not session.query(Booking).filter(Booking.lead_id == lead_vikram.id).first():
+                    b3 = Booking(
+                        slot_id=slot_cancelled.id,
+                        lead_id=lead_vikram.id,
+                        project_id=skyline.id if skyline else greenwood.id,
+                        buyer_id=vikram_buyer.id,
+                        executive_id=priya_exec.id if priya_exec else rohit_exec.id,
+                        status=BookingStatus.CANCELLED.value,
+                        cancellation_reason="Buyer requested cancellation due to outstation business travel.",
+                        cancelled_at=now,
+                        cancelled_by_id=vikram_buyer.id,
+                        notes="Cancelled by buyer via portal.",
+                    )
+                    session.add(b3)
+                    print("Seeded cancelled booking for Vikram Malhotra")
+
+                session.commit()
 
     print("Setup completed successfully.")
 

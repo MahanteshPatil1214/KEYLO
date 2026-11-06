@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   Building2,
+  CalendarDays,
   LogOut,
   Menu,
   ShieldCheck,
@@ -69,6 +70,19 @@ export function AdminLayout() {
               >
                 <Building2 className="size-4" />
                 <span>Projects & Fact Sheets</span>
+              </NavLink>
+              <NavLink
+                to="/admin/visits"
+                className={({ isActive }) =>
+                  `inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors ${
+                    isActive
+                      ? "bg-charcoal text-ivory shadow-sm"
+                      : "text-charcoal/70 hover:bg-charcoal/5 hover:text-charcoal"
+                  }`
+                }
+              >
+                <CalendarDays className="size-4" />
+                <span>Site Visits & Slots</span>
               </NavLink>
             </nav>
           </div>
@@ -146,6 +160,14 @@ export function AdminLayout() {
               >
                 <Building2 className="size-4 text-charcoal" />
                 <span>Projects & Fact Sheets</span>
+              </Link>
+              <Link
+                to="/admin/visits"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-charcoal/70 hover:bg-charcoal/5 hover:text-charcoal"
+              >
+                <CalendarDays className="size-4 text-charcoal" />
+                <span>Site Visits & Slots</span>
               </Link>
               <button
                 type="button"

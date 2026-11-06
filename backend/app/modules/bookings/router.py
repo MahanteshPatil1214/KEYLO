@@ -18,6 +18,7 @@ from app.modules.bookings.schemas import (
     BookingCreateRequest,
     BookingCustomScheduleRequest,
     BookingListResponse,
+    BookingMetricsResponse,
     BookingRescheduleRequest,
     BookingResponse,
     BookingStatusUpdateRequest,
@@ -33,6 +34,7 @@ from app.modules.bookings.service import (
     deactivate_slot,
     get_available_slots,
     get_booking,
+    get_booking_metrics_summary,
     get_slot,
     list_bookings,
     list_slots,
@@ -187,6 +189,20 @@ def create_booking_endpoint(
 
 
 @bookings_router.get(
+    "/metrics",
+    response_model=BookingMetricsResponse,
+    summary="Get site visits and slot availability metrics summary (Admin only)",
+)
+def get_booking_metrics_endpoint(
+    current_user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+) -> BookingMetricsResponse:
+    """Return aggregate statistics across site visits and slots."""
+
+    return get_booking_metrics_summary(db, actor=current_user)
+
+
+@bookings_router.get(
     "",
     response_model=BookingListResponse,
     summary="List bookings",
@@ -202,6 +218,7 @@ def list_bookings_endpoint(
         BookingStatus | None,
         Query(alias="status", description="Filter by booking status."),
     ] = None,
+    search: str | None = None,
 ) -> BookingListResponse:
     """List bookings filtered by caller authorization."""
 
@@ -213,6 +230,7 @@ def list_bookings_endpoint(
         project_id=project_id,
         lead_id=lead_id,
         status=booking_status,
+        search=search,
     )
 
 

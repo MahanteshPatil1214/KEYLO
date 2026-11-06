@@ -825,3 +825,71 @@ def test_unauthenticated_requests_return_401(
     assert client.post("/api/v1/bookings", json={}).status_code == 401
     assert client.get(f"/api/v1/bookings/{random_id}").status_code == 401
     assert client.post(f"/api/v1/bookings/{random_id}/cancel", json={}).status_code == 401
+
+
+def test_admin_get_booking_metrics(
+    client: TestClient,
+    override_db: None,
+    admin_headers: dict[str, str],
+    buyer_headers: dict[str, str],
+    active_project: dict[str, Any],
+    buyer_lead: dict[str, Any],
+) -> None:
+    # Non-admin access should be 403
+    res_forbidden = client.get("/api/v1/bookings/metrics", headers=buyer_headers)
+    assert res_forbidden.status_code == 403
+
+    # Admin access should be 200 with all metrics fields
+    res = client.get("/api/v1/bookings/metrics", headers=admin_headers)
+    assert res.status_code == 200
+    data = res.json()
+    assert "total_visits" in data
+    assert "upcoming_visits" in data
+    assert "completed_visits" in data
+    assert "cancelled_visits" in data
+    assert "total_slots" in data
+    assert "active_slots" in data
+    assert "blocked_slots" in data
+
+
+def test_admin_list_bookings_search(
+    client: TestClient,
+    override_db: None,
+    admin_headers: dict[str, str],
+    buyer_headers: dict[str, str],
+    active_project: dict[str, Any],
+    buyer_lead: dict[str, Any],
+) -> None:
+    start = _future(24)
+    end = start + timedelta(hours=1)
+    slot = create_slot(
+        client,
+        admin_headers,
+        project_id=active_project["id"],
+        start_time=start,
+        end_time=end,
+    )
+    booking = create_booking(
+        client,
+        buyer_headers,
+        slot_id=slot["id"],
+        lead_id=buyer_lead["id"],
+    )
+
+    # Search matching buyer name
+    res_found = client.get(
+        f"/api/v1/bookings?search={buyer_lead['full_name'][:4]}",
+        headers=admin_headers,
+    )
+    assert res_found.status_code == 200
+    items = res_found.json()["items"]
+    assert any(b["id"] == booking["id"] for b in items)
+
+    # Search non-matching term
+    res_none = client.get(
+        "/api/v1/bookings?search=NonExistentBuyerZzz999",
+        headers=admin_headers,
+    )
+    assert res_none.status_code == 200
+    assert len(res_none.json()["items"]) == 0
+

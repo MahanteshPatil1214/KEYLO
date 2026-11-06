@@ -143,7 +143,7 @@ def list_slots(
 ) -> list[VisitSlot]:
     """Return a paginated list of visit slots."""
 
-    statement = select(VisitSlot)
+    statement = select(VisitSlot).options(joinedload(VisitSlot.project))
     if project_id is not None:
         statement = statement.where(VisitSlot.project_id == project_id)
     if is_active is not None:
@@ -155,6 +155,77 @@ def list_slots(
 
     statement = statement.order_by(VisitSlot.start_time.asc()).offset(offset).limit(limit)
     return list(session.scalars(statement).all())
+
+
+def get_slot_booked_counts(session: Session, slot_ids: list[UUID]) -> dict[UUID, int]:
+    """Return a mapping of slot_id to active bookings count."""
+
+    if not slot_ids:
+        return {}
+    statement = (
+        select(Booking.slot_id, func.count())
+        .where(
+            Booking.slot_id.in_(slot_ids),
+            Booking.status.in_(ACTIVE_BOOKING_STATUSES),
+        )
+        .group_by(Booking.slot_id)
+    )
+    return {row[0]: row[1] for row in session.execute(statement).all()}
+
+
+def get_booking_metrics(session: Session) -> dict[str, int]:
+    """Aggregate metrics across bookings and slots for admin analytics."""
+
+    total_visits = int(session.scalar(select(func.count()).select_from(Booking)) or 0)
+    upcoming_visits = int(
+        session.scalar(
+            select(func.count())
+            .select_from(Booking)
+            .where(
+                Booking.status.in_(
+                    [BookingStatus.CONFIRMED.value, BookingStatus.PENDING.value]
+                )
+            )
+        )
+        or 0
+    )
+    completed_visits = int(
+        session.scalar(
+            select(func.count())
+            .select_from(Booking)
+            .where(Booking.status == BookingStatus.COMPLETED.value)
+        )
+        or 0
+    )
+    cancelled_visits = int(
+        session.scalar(
+            select(func.count())
+            .select_from(Booking)
+            .where(Booking.status == BookingStatus.CANCELLED.value)
+        )
+        or 0
+    )
+    total_slots = int(
+        session.scalar(select(func.count()).select_from(VisitSlot)) or 0
+    )
+    active_slots = int(
+        session.scalar(
+            select(func.count())
+            .select_from(VisitSlot)
+            .where(VisitSlot.is_active.is_(True))
+        )
+        or 0
+    )
+    blocked_slots = max(0, total_slots - active_slots)
+    return {
+        "total_visits": total_visits,
+        "upcoming_visits": upcoming_visits,
+        "completed_visits": completed_visits,
+        "cancelled_visits": cancelled_visits,
+        "total_slots": total_slots,
+        "active_slots": active_slots,
+        "blocked_slots": blocked_slots,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -244,6 +315,7 @@ def count_bookings(
     lead_id: UUID | None = None,
     status: BookingStatus | None = None,
     active_project_only: bool = False,
+    search: str | None = None,
 ) -> int:
     """Count bookings matching caller access scope and filters."""
 
@@ -273,6 +345,14 @@ def count_bookings(
         statement = statement.where(Booking.lead_id == lead_id)
     if status is not None:
         statement = statement.where(Booking.status == status.value)
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        from app.modules.leads.models import Lead
+        statement = statement.join(Booking.lead).where(
+            Lead.full_name.ilike(term)
+            | Lead.phone.ilike(term)
+            | Lead.email.ilike(term)
+        )
     return int(session.scalar(statement) or 0)
 
 
@@ -287,6 +367,7 @@ def list_bookings(
     lead_id: UUID | None = None,
     status: BookingStatus | None = None,
     active_project_only: bool = False,
+    search: str | None = None,
 ) -> list[Booking]:
     """Return a paginated list of bookings with relationships."""
 
@@ -325,6 +406,14 @@ def list_bookings(
         statement = statement.where(Booking.lead_id == lead_id)
     if status is not None:
         statement = statement.where(Booking.status == status.value)
+    if search and search.strip():
+        term = f"%{search.strip()}%"
+        from app.modules.leads.models import Lead
+        statement = statement.join(Booking.lead).where(
+            Lead.full_name.ilike(term)
+            | Lead.phone.ilike(term)
+            | Lead.email.ilike(term)
+        )
 
     statement = statement.order_by(Booking.created_at.desc()).offset(offset).limit(limit)
     return list(session.scalars(statement).all())

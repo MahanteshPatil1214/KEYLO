@@ -63,6 +63,27 @@ class VisitSlotResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    project_name: str | None = None
+    booked_count: int = 0
+    available_capacity: int = 0
+
+    @classmethod
+    def from_orm_model(cls, slot: VisitSlot, booked_count: int = 0) -> VisitSlotResponse:
+        return cls(
+            id=slot.id,
+            project_id=slot.project_id,
+            start_time=slot.start_time,
+            end_time=slot.end_time,
+            capacity=slot.capacity,
+            is_active=slot.is_active,
+            notes=slot.notes,
+            created_at=slot.created_at,
+            updated_at=slot.updated_at,
+            project_name=slot.project.name if getattr(slot, "project", None) else None,
+            booked_count=booked_count,
+            available_capacity=max(0, slot.capacity - booked_count),
+        )
+
 
 class AvailableSlotResponse(BaseModel):
     """Public representation of a visit slot showing real-time available capacity."""
@@ -162,6 +183,18 @@ class BookingStatusUpdateRequest(BaseModel):
     notes: str | None = Field(default=None, max_length=1000)
 
 
+class BookingMetricsResponse(BaseModel):
+    """Aggregate metrics for admin site visits and availability dashboard."""
+
+    total_visits: int
+    upcoming_visits: int
+    completed_visits: int
+    cancelled_visits: int
+    total_slots: int
+    active_slots: int
+    blocked_slots: int
+
+
 class BookingResponse(BaseModel):
     """Comprehensive representation of a site visit booking."""
 
@@ -181,12 +214,14 @@ class BookingResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    # Dynamically populated from lead and slot relationships
+    # Dynamically populated from lead, project, executive and slot relationships
     buyer_name: str
     buyer_phone: str | None
     buyer_email: str | None
     slot_start_time: datetime
     slot_end_time: datetime
+    project_name: str | None = None
+    executive_name: str | None = None
 
     @classmethod
     def from_orm_model(cls, booking: Booking) -> BookingResponse:
@@ -211,6 +246,8 @@ class BookingResponse(BaseModel):
             buyer_email=booking.lead.email,
             slot_start_time=booking.slot.start_time,
             slot_end_time=booking.slot.end_time,
+            project_name=booking.project.name if getattr(booking, "project", None) else None,
+            executive_name=booking.executive.full_name if getattr(booking, "executive", None) else None,
         )
 
 

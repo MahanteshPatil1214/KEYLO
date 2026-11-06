@@ -22,6 +22,19 @@ import type {
   UpdateFactPayload,
   UpdateProjectPayload,
 } from "./projectModel";
+import type {
+  AdminBookingStatus,
+  BookingItem,
+  BookingListResponse,
+  BookingMetrics,
+  CancelBookingPayload,
+  CreateSlotPayload,
+  RescheduleBookingPayload,
+  UpdateBookingStatusPayload,
+  UpdateSlotPayload,
+  VisitSlotItem,
+  VisitSlotListResponse,
+} from "./visitModel";
 
 async function authenticatedRequest<T>(
   path: string,
@@ -267,5 +280,128 @@ export async function fetchFactVersions(
   return authenticatedRequest<FactVersionListResponse>(
     `/facts/${factId}/versions?page=${page}&page_size=${pageSize}`,
   );
+}
+
+// ===========================================================================
+// Visits & Availability API
+// ===========================================================================
+
+export async function fetchBookingMetrics(): Promise<BookingMetrics> {
+  return authenticatedRequest<BookingMetrics>("/bookings/metrics");
+}
+
+export type FetchBookingsParams = {
+  page?: number;
+  pageSize?: number;
+  projectId?: string;
+  leadId?: string;
+  status?: AdminBookingStatus | "ALL";
+  search?: string;
+};
+
+export async function fetchBookings(
+  params: FetchBookingsParams = {},
+): Promise<BookingListResponse> {
+  const query = new URLSearchParams();
+  if (params.page) query.set("page", String(params.page));
+  if (params.pageSize) query.set("page_size", String(params.pageSize));
+  if (params.projectId && params.projectId !== "ALL") query.set("project_id", params.projectId);
+  if (params.leadId) query.set("lead_id", params.leadId);
+  if (params.status && params.status !== "ALL") query.set("status", params.status);
+  if (params.search) query.set("search", params.search.trim());
+
+  const queryString = query.toString();
+  return authenticatedRequest<BookingListResponse>(
+    queryString ? `/bookings?${queryString}` : "/bookings",
+  );
+}
+
+export async function fetchBooking(bookingId: string): Promise<BookingItem> {
+  return authenticatedRequest<BookingItem>(`/bookings/${bookingId}`);
+}
+
+export async function cancelBooking(
+  bookingId: string,
+  payload: CancelBookingPayload = {},
+): Promise<BookingItem> {
+  return authenticatedRequest<BookingItem>(`/bookings/${bookingId}/cancel`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function rescheduleBooking(
+  bookingId: string,
+  payload: RescheduleBookingPayload,
+): Promise<BookingItem> {
+  return authenticatedRequest<BookingItem>(`/bookings/${bookingId}/reschedule`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateBookingStatus(
+  bookingId: string,
+  payload: UpdateBookingStatusPayload,
+): Promise<BookingItem> {
+  return authenticatedRequest<BookingItem>(`/bookings/${bookingId}/status`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export type FetchSlotsParams = {
+  page?: number;
+  pageSize?: number;
+  projectId?: string;
+  isActive?: boolean;
+  fromTime?: string;
+  toTime?: string;
+};
+
+export async function fetchSlots(
+  params: FetchSlotsParams = {},
+): Promise<VisitSlotListResponse> {
+  const query = new URLSearchParams();
+  if (params.page) query.set("page", String(params.page));
+  if (params.pageSize) query.set("page_size", String(params.pageSize));
+  if (params.projectId && params.projectId !== "ALL") query.set("project_id", params.projectId);
+  if (params.isActive !== undefined) query.set("is_active", String(params.isActive));
+  if (params.fromTime) query.set("from_time", params.fromTime);
+  if (params.toTime) query.set("to_time", params.toTime);
+
+  const queryString = query.toString();
+  return authenticatedRequest<VisitSlotListResponse>(
+    queryString ? `/slots?${queryString}` : "/slots",
+  );
+}
+
+export async function fetchSlot(slotId: string): Promise<VisitSlotItem> {
+  return authenticatedRequest<VisitSlotItem>(`/slots/${slotId}`);
+}
+
+export async function createSlot(
+  payload: CreateSlotPayload,
+): Promise<VisitSlotItem> {
+  return authenticatedRequest<VisitSlotItem>("/slots", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateSlot(
+  slotId: string,
+  payload: UpdateSlotPayload,
+): Promise<VisitSlotItem> {
+  return authenticatedRequest<VisitSlotItem>(`/slots/${slotId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deactivateSlot(slotId: string): Promise<VisitSlotItem> {
+  return authenticatedRequest<VisitSlotItem>(`/slots/${slotId}`, {
+    method: "DELETE",
+  });
 }
 
