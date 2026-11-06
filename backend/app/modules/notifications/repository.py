@@ -39,7 +39,10 @@ def get_notification_by_id(
         .where(Notification.id == notification_id)
     )
     if for_update:
-        statement = statement.with_for_update()
+        # Notification relationships use eager joined loads. A bare FOR UPDATE
+        # would try to lock the nullable side of those outer joins, which
+        # PostgreSQL rejects, so lock the notifications row explicitly.
+        statement = statement.with_for_update(of=Notification)
     return session.scalar(statement)
 
 

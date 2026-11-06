@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import {
   BrowserRouter,
+  Navigate,
   Route,
   Routes,
   useLocation,
@@ -25,6 +26,17 @@ import { ConversationsPage } from "./buyer/ConversationsPage";
 import { SiteVisitsPage } from "./buyer/SiteVisitsPage";
 import { ProjectInfoPage } from "./buyer/ProjectInfoPage";
 import { ProfilePage } from "./buyer/ProfilePage";
+import { SalesAuthGuard } from "./sales/SalesAuthGuard";
+import { SalesLayout } from "./sales/SalesLayout";
+import { SalesDashboardPage } from "./sales/SalesDashboardPage";
+import { SalesNotificationsPage } from "./sales/SalesNotificationsPage";
+import { SalesProfilePage } from "./sales/SalesProfilePage";
+import {
+  SalesConversationsPage,
+  SalesFollowUpsPage,
+  SalesLeadsPage,
+  SalesVisitsPage,
+} from "./sales/SalesPlaceholderPages";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -85,10 +97,25 @@ export default function App() {
             path="/admin"
             element={<WorkspacePage expectedRole="ADMIN" />}
           />
-          <Route
-            path="/sales"
-            element={<WorkspacePage expectedRole="SALES_EXECUTIVE" />}
-          />
+          <Route path="/sales" element={<SalesAuthGuard />}>
+            <Route element={<SalesLayout />}>
+              <Route index element={<SalesDashboardPage />} />
+              <Route path="overview" element={<SalesDashboardPage />} />
+              <Route path="leads" element={<SalesLeadsPage />} />
+              <Route
+                path="conversations"
+                element={<SalesConversationsPage />}
+              />
+              <Route path="visits" element={<SalesVisitsPage />} />
+              <Route path="follow-ups" element={<SalesFollowUpsPage />} />
+              <Route
+                path="notifications"
+                element={<SalesNotificationsPage />}
+              />
+              <Route path="profile" element={<SalesProfilePage />} />
+              <Route path="*" element={<Navigate to="/sales" replace />} />
+            </Route>
+          </Route>
           <Route path="/buyer" element={<BuyerAuthGuard />}>
             <Route element={<BuyerLayout />}>
               <Route index element={<BuyerDashboardPage />} />
