@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   AlertCircle,
   Bell,
@@ -43,7 +44,7 @@ import { AIAssistantSettingsTab } from "./settings/AIAssistantSettingsTab";
 import { LeadAssignmentTab } from "./settings/LeadAssignmentTab";
 import { AuditLogsTab } from "./settings/AuditLogsTab";
 
-type SettingsTab =
+export type SettingsTab =
   | "reminders"
   | "notifications"
   | "templates"
@@ -51,8 +52,36 @@ type SettingsTab =
   | "lead_assignment"
   | "audit_logs";
 
-export function SystemSettingsPage() {
-  const [activeTab, setActiveTab] = useState<SettingsTab>("reminders");
+export interface SystemSettingsPageProps {
+  initialTab?: SettingsTab;
+}
+
+const VALID_TABS: SettingsTab[] = [
+  "reminders",
+  "notifications",
+  "templates",
+  "ai_assistant",
+  "lead_assignment",
+  "audit_logs",
+];
+
+export function SystemSettingsPage({ initialTab }: SystemSettingsPageProps = {}) {
+  const [searchParams] = useSearchParams();
+  const urlTab = searchParams.get("tab") as SettingsTab | null;
+
+  const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
+    if (initialTab && VALID_TABS.includes(initialTab)) return initialTab;
+    if (urlTab && VALID_TABS.includes(urlTab)) return urlTab;
+    return "reminders";
+  });
+
+  useEffect(() => {
+    if (initialTab && VALID_TABS.includes(initialTab)) {
+      setActiveTab(initialTab);
+    } else if (urlTab && VALID_TABS.includes(urlTab)) {
+      setActiveTab(urlTab);
+    }
+  }, [initialTab, urlTab]);
 
   const [settings, setSettings] = useState<AllSystemSettingsResponse | null>(null);
   const [templates, setTemplates] = useState<NotificationTemplateItem[]>([]);

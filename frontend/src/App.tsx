@@ -20,6 +20,7 @@ import { NotFoundPage } from "./pages/NotFoundPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { AdminAuthGuard } from "./admin/AdminAuthGuard";
 import { AdminLayout } from "./admin/AdminLayout";
+import { AdminOverviewPage } from "./admin/AdminOverviewPage";
 import { UserManagementPage } from "./admin/UserManagementPage";
 import { ProjectManagementPage } from "./admin/ProjectManagementPage";
 import { VisitManagementPage } from "./admin/VisitManagementPage";
@@ -99,12 +100,17 @@ export default function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/admin" element={<AdminAuthGuard />}>
             <Route element={<AdminLayout />}>
-              <Route index element={<UserManagementPage />} />
+              <Route index element={<AdminOverviewPage />} />
+              <Route path="overview" element={<AdminOverviewPage />} />
               <Route path="users" element={<UserManagementPage />} />
               <Route path="projects" element={<ProjectManagementPage />} />
               <Route path="visits" element={<VisitManagementPage />} />
               <Route path="analytics" element={<AnalyticsDashboardPage />} />
               <Route path="settings" element={<SystemSettingsPage />} />
+              <Route
+                path="audit-logs"
+                element={<SystemSettingsPage initialTab="audit_logs" />}
+              />
               <Route path="*" element={<Navigate to="/admin" replace />} />
             </Route>
           </Route>
