@@ -14,6 +14,7 @@ from app.modules.leads.router import router as leads_router
 from app.modules.messages.router import router as messages_router
 from app.modules.notifications.router import notifications_router
 from app.modules.projects.router import router as projects_router
+from app.modules.settings.router import settings_router
 from app.modules.users.router import router as users_router
 
 api_router = APIRouter()
@@ -31,3 +32,4 @@ api_router.include_router(follow_ups_router)
 api_router.include_router(handoffs_router)
 api_router.include_router(notifications_router)
 api_router.include_router(dashboard_router)
+api_router.include_router(settings_router)

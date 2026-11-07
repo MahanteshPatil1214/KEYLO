@@ -6,6 +6,7 @@ import {
   CalendarDays,
   LogOut,
   Menu,
+  Settings,
   ShieldCheck,
   Users,
   X,
@@ -97,6 +98,19 @@ export function AdminLayout() {
               >
                 <BarChart3 className="size-4" />
                 <span>Analytics & Reports</span>
+              </NavLink>
+              <NavLink
+                to="/admin/settings"
+                className={({ isActive }) =>
+                  `inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors ${
+                    isActive
+                      ? "bg-charcoal text-ivory shadow-sm"
+                      : "text-charcoal/70 hover:bg-charcoal/5 hover:text-charcoal"
+                  }`
+                }
+              >
+                <Settings className="size-4" />
+                <span>Settings</span>
               </NavLink>
             </nav>
           </div>
@@ -190,6 +204,14 @@ export function AdminLayout() {
               >
                 <BarChart3 className="size-4 text-charcoal" />
                 <span>Analytics & Reports</span>
+              </Link>
+              <Link
+                to="/admin/settings"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-charcoal/70 hover:bg-charcoal/5 hover:text-charcoal"
+              >
+                <Settings className="size-4 text-charcoal" />
+                <span>Settings</span>
               </Link>
               <button
                 type="button"

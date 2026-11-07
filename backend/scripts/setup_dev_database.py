@@ -457,8 +457,25 @@ def setup() -> None:
                         created_by_id=admin_user.id if admin_user else None,
                     )
                     session.add(spend)
-            session.commit()
-            print("Seeded marketing spend records")
+            # 7. Seed System Settings, Notification Templates, and Baseline Audit Log
+            from app.modules.settings.service import ensure_defaults_seeded, log_admin_action
+            from app.modules.settings.models import AuditLog
+
+            ensure_defaults_seeded(session)
+            print("Seeded system settings and notification templates")
+
+            existing_log = session.query(AuditLog).first()
+            if not existing_log and admin_user:
+                log_admin_action(
+                    session,
+                    actor=admin_user,
+                    action="SYSTEM_INITIALIZATION",
+                    resource_type="SYSTEM",
+                    resource_id="CONFIG",
+                    details={"message": "System baseline settings, reminders, and notification templates initialized."},
+                )
+                session.commit()
+                print("Seeded baseline audit log")
 
     print("Setup completed successfully.")
 

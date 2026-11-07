@@ -45,6 +45,26 @@ import type {
   SourcePerformanceResponse,
   TrendGranularity,
 } from "./analyticsModel";
+import type {
+  AIAssistantSettings,
+  AllSystemSettingsResponse,
+  AuditLogListResponse,
+  AuditLogQueryParams,
+  BroadcastNotificationPayload,
+  BroadcastNotificationResponse,
+  LanguageSettings,
+  LeadAssignmentSettings,
+  NotificationTemplateItem,
+  NotificationTemplateListResponse,
+  ReminderSettings,
+  SystemNotificationListResponse,
+  SystemNotificationQueryParams,
+  UpdateAIAssistantSettingsPayload,
+  UpdateLanguageSettingsPayload,
+  UpdateLeadAssignmentSettingsPayload,
+  UpdateNotificationTemplatePayload,
+  UpdateReminderSettingsPayload,
+} from "./settingsModel";
 
 async function authenticatedRequest<T>(
   path: string,
@@ -516,6 +536,119 @@ export async function createMarketingSpend(
   payload: CreateMarketingSpendPayload,
 ): Promise<MarketingSpendItem> {
   return authenticatedRequest<MarketingSpendItem>("/dashboard/marketing-spend", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+// ===========================================================================
+// System Settings, Notification Templates, and Audit Logs API
+// ===========================================================================
+
+export async function fetchSystemSettings(): Promise<AllSystemSettingsResponse> {
+  return authenticatedRequest<AllSystemSettingsResponse>("/settings");
+}
+
+export async function updateReminderSettings(
+  payload: UpdateReminderSettingsPayload,
+): Promise<ReminderSettings> {
+  return authenticatedRequest<ReminderSettings>("/settings/reminders", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function triggerRemindersScan(): Promise<{ dispatched_count: number; last_run_at: string }> {
+  return authenticatedRequest<{ dispatched_count: number; last_run_at: string }>("/settings/reminders/trigger", {
+    method: "POST",
+  });
+}
+
+export async function updateAIAssistantSettings(
+  payload: UpdateAIAssistantSettingsPayload,
+): Promise<AIAssistantSettings> {
+  return authenticatedRequest<AIAssistantSettings>("/settings/ai-assistant", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateLanguageSettings(
+  payload: UpdateLanguageSettingsPayload,
+): Promise<LanguageSettings> {
+  return authenticatedRequest<LanguageSettings>("/settings/languages", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateLeadAssignmentSettings(
+  payload: UpdateLeadAssignmentSettingsPayload,
+): Promise<LeadAssignmentSettings> {
+  return authenticatedRequest<LeadAssignmentSettings>("/settings/lead-assignment", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function fetchNotificationTemplates(): Promise<NotificationTemplateListResponse> {
+  return authenticatedRequest<NotificationTemplateListResponse>("/settings/templates");
+}
+
+export async function updateNotificationTemplate(
+  templateId: string,
+  payload: UpdateNotificationTemplatePayload,
+): Promise<NotificationTemplateItem> {
+  return authenticatedRequest<NotificationTemplateItem>(`/settings/templates/${templateId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function resetNotificationTemplate(
+  templateId: string,
+): Promise<NotificationTemplateItem> {
+  return authenticatedRequest<NotificationTemplateItem>(`/settings/templates/${templateId}/reset`, {
+    method: "POST",
+  });
+}
+
+export async function fetchAuditLogs(
+  params: AuditLogQueryParams = {},
+): Promise<AuditLogListResponse> {
+  const query = new URLSearchParams();
+  if (params.page) query.set("page", String(params.page));
+  if (params.pageSize) query.set("page_size", String(params.pageSize));
+  if (params.action && params.action !== "ALL") query.set("action", params.action);
+  if (params.resourceType && params.resourceType !== "ALL") query.set("resource_type", params.resourceType);
+  if (params.search?.trim()) query.set("search", params.search.trim());
+
+  const queryString = query.toString();
+  return authenticatedRequest<AuditLogListResponse>(
+    queryString ? `/settings/audit-logs?${queryString}` : "/settings/audit-logs",
+  );
+}
+
+export async function fetchSystemNotifications(
+  params: SystemNotificationQueryParams = {},
+): Promise<SystemNotificationListResponse> {
+  const query = new URLSearchParams();
+  if (params.page) query.set("page", String(params.page));
+  if (params.pageSize) query.set("page_size", String(params.pageSize));
+  if (params.type && params.type !== "ALL") query.set("type", params.type);
+  if (params.isRead !== undefined) query.set("is_read", String(params.isRead));
+  if (params.search?.trim()) query.set("search", params.search.trim());
+
+  const queryString = query.toString();
+  return authenticatedRequest<SystemNotificationListResponse>(
+    queryString ? `/settings/notifications?${queryString}` : "/settings/notifications",
+  );
+}
+
+export async function broadcastSystemNotification(
+  payload: BroadcastNotificationPayload,
+): Promise<BroadcastNotificationResponse> {
+  return authenticatedRequest<BroadcastNotificationResponse>("/settings/notifications/broadcast", {
     method: "POST",
     body: JSON.stringify(payload),
   });
