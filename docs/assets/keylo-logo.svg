@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 72" width="280" height="72">
+  <rect x="4" y="12" width="48" height="48" rx="12" fill="#1F2421"/>
+  <path d="M17 46V22h4.5v10.3l9.1-10.3h5.7l-9.8 10.9 10.2 14.2h-5.7l-7.7-11-1.8 2V46H17Z" fill="#FFFDF9"/>
+  <circle cx="39.5" cy="22.5" r="2.2" fill="#C5A77D"/>
+  <text x="66" y="48" font-family="'DM Serif Display', Georgia, serif" font-size="40" font-weight="400" fill="#1F2421" letter-spacing="-1.5">keylo</text>
+</svg>
