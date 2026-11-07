@@ -35,6 +35,16 @@ import type {
   VisitSlotItem,
   VisitSlotListResponse,
 } from "./visitModel";
+import type {
+  CreateMarketingSpendPayload,
+  DashboardSummary,
+  DashboardTrends,
+  ExecutivePerformanceResponse,
+  MarketingSpendItem,
+  MarketingSpendListResponse,
+  SourcePerformanceResponse,
+  TrendGranularity,
+} from "./analyticsModel";
 
 async function authenticatedRequest<T>(
   path: string,
@@ -402,6 +412,112 @@ export async function updateSlot(
 export async function deactivateSlot(slotId: string): Promise<VisitSlotItem> {
   return authenticatedRequest<VisitSlotItem>(`/slots/${slotId}`, {
     method: "DELETE",
+  });
+}
+
+// ===========================================================================
+// Analytics & Reporting Dashboard API
+// ===========================================================================
+
+export type DashboardQueryParams = {
+  dateFrom?: string;
+  dateTo?: string;
+  projectId?: string;
+};
+
+export async function fetchDashboardSummary(
+  params: DashboardQueryParams = {},
+): Promise<DashboardSummary> {
+  const query = new URLSearchParams();
+  if (params.dateFrom) query.set("date_from", params.dateFrom);
+  if (params.dateTo) query.set("date_to", params.dateTo);
+  if (params.projectId && params.projectId !== "ALL") query.set("project_id", params.projectId);
+
+  const queryString = query.toString();
+  return authenticatedRequest<DashboardSummary>(
+    queryString ? `/dashboard/summary?${queryString}` : "/dashboard/summary",
+  );
+}
+
+export type TrendQueryParams = DashboardQueryParams & {
+  granularity?: TrendGranularity;
+};
+
+export async function fetchDashboardTrends(
+  params: TrendQueryParams = {},
+): Promise<DashboardTrends> {
+  const query = new URLSearchParams();
+  if (params.dateFrom) query.set("date_from", params.dateFrom);
+  if (params.dateTo) query.set("date_to", params.dateTo);
+  if (params.projectId && params.projectId !== "ALL") query.set("project_id", params.projectId);
+  if (params.granularity) query.set("granularity", params.granularity);
+
+  const queryString = query.toString();
+  return authenticatedRequest<DashboardTrends>(
+    queryString ? `/dashboard/trends?${queryString}` : "/dashboard/trends",
+  );
+}
+
+export async function fetchSourcePerformance(
+  params: DashboardQueryParams = {},
+): Promise<SourcePerformanceResponse> {
+  const query = new URLSearchParams();
+  if (params.dateFrom) query.set("date_from", params.dateFrom);
+  if (params.dateTo) query.set("date_to", params.dateTo);
+  if (params.projectId && params.projectId !== "ALL") query.set("project_id", params.projectId);
+
+  const queryString = query.toString();
+  return authenticatedRequest<SourcePerformanceResponse>(
+    queryString ? `/dashboard/sources?${queryString}` : "/dashboard/sources",
+  );
+}
+
+export async function fetchExecutivePerformance(
+  params: DashboardQueryParams = {},
+): Promise<ExecutivePerformanceResponse> {
+  const query = new URLSearchParams();
+  if (params.dateFrom) query.set("date_from", params.dateFrom);
+  if (params.dateTo) query.set("date_to", params.dateTo);
+  if (params.projectId && params.projectId !== "ALL") query.set("project_id", params.projectId);
+
+  const queryString = query.toString();
+  return authenticatedRequest<ExecutivePerformanceResponse>(
+    queryString ? `/dashboard/executives?${queryString}` : "/dashboard/executives",
+  );
+}
+
+export type MarketingSpendQueryParams = {
+  page?: number;
+  pageSize?: number;
+  projectId?: string;
+  source?: string;
+  periodFrom?: string;
+  periodTo?: string;
+};
+
+export async function fetchMarketingSpend(
+  params: MarketingSpendQueryParams = {},
+): Promise<MarketingSpendListResponse> {
+  const query = new URLSearchParams();
+  if (params.page) query.set("page", String(params.page));
+  if (params.pageSize) query.set("page_size", String(params.pageSize));
+  if (params.projectId && params.projectId !== "ALL") query.set("project_id", params.projectId);
+  if (params.source && params.source !== "ALL") query.set("source", params.source);
+  if (params.periodFrom) query.set("period_from", params.periodFrom);
+  if (params.periodTo) query.set("period_to", params.periodTo);
+
+  const queryString = query.toString();
+  return authenticatedRequest<MarketingSpendListResponse>(
+    queryString ? `/dashboard/marketing-spend?${queryString}` : "/dashboard/marketing-spend",
+  );
+}
+
+export async function createMarketingSpend(
+  payload: CreateMarketingSpendPayload,
+): Promise<MarketingSpendItem> {
+  return authenticatedRequest<MarketingSpendItem>("/dashboard/marketing-spend", {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }
 

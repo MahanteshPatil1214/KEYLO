@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
+  BarChart3,
   Building2,
   CalendarDays,
   LogOut,
@@ -83,6 +84,19 @@ export function AdminLayout() {
               >
                 <CalendarDays className="size-4" />
                 <span>Site Visits & Slots</span>
+              </NavLink>
+              <NavLink
+                to="/admin/analytics"
+                className={({ isActive }) =>
+                  `inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors ${
+                    isActive
+                      ? "bg-charcoal text-ivory shadow-sm"
+                      : "text-charcoal/70 hover:bg-charcoal/5 hover:text-charcoal"
+                  }`
+                }
+              >
+                <BarChart3 className="size-4" />
+                <span>Analytics & Reports</span>
               </NavLink>
             </nav>
           </div>
@@ -168,6 +182,14 @@ export function AdminLayout() {
               >
                 <CalendarDays className="size-4 text-charcoal" />
                 <span>Site Visits & Slots</span>
+              </Link>
+              <Link
+                to="/admin/analytics"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-charcoal/70 hover:bg-charcoal/5 hover:text-charcoal"
+              >
+                <BarChart3 className="size-4 text-charcoal" />
+                <span>Analytics & Reports</span>
               </Link>
               <button
                 type="button"

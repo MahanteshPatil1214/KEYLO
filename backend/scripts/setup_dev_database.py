@@ -14,11 +14,14 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
+import app.api.v1.router  # noqa: F401
 from app.db.base import Base
 from app.db.session import engine, SessionLocal
 from app.modules.auth.service import create_user_with_role
 from app.modules.bookings.models import Booking, BookingStatus, VisitSlot
+from app.modules.dashboard.models import MarketingSpend
 from app.modules.leads.models import Lead, LeadAssignment, LeadSource, LeadStatus
 from app.modules.projects import repository as project_repo
 from app.modules.projects.models import (
@@ -425,6 +428,37 @@ def setup() -> None:
                     print("Seeded cancelled booking for Vikram Malhotra")
 
                 session.commit()
+
+            # 6. Seed Marketing Spend Records
+            period_start = date(now.year, now.month, 1)
+            period_end = date(now.year, now.month + 1, 1) - timedelta(days=1) if now.month < 12 else date(now.year, 12, 31)
+
+            spends_to_seed = [
+                (greenwood.id if greenwood else None, LeadSource.WEBSITE.value, Decimal("50000.00"), "Google Ads Search & Meta Retargeting for Greenwood"),
+                (greenwood.id if greenwood else None, LeadSource.PROPERTY_PORTAL.value, Decimal("75000.00"), "99acres & MagicBricks featured developer banners"),
+                (None, LeadSource.SOCIAL_MEDIA.value, Decimal("40000.00"), "Instagram brand awareness campaigns"),
+                (None, LeadSource.REFERRAL.value, Decimal("15000.00"), "Loyalty referral reward pool"),
+            ]
+
+            for proj_id, src, amt, notes in spends_to_seed:
+                existing_spend = session.query(MarketingSpend).filter(
+                    MarketingSpend.source == src,
+                    MarketingSpend.project_id == proj_id,
+                    MarketingSpend.period_start == period_start,
+                ).first()
+                if not existing_spend:
+                    spend = MarketingSpend(
+                        project_id=proj_id,
+                        source=src,
+                        period_start=period_start,
+                        period_end=period_end,
+                        amount=amt,
+                        notes=notes,
+                        created_by_id=admin_user.id if admin_user else None,
+                    )
+                    session.add(spend)
+            session.commit()
+            print("Seeded marketing spend records")
 
     print("Setup completed successfully.")
 

@@ -23,6 +23,7 @@ import { AdminLayout } from "./admin/AdminLayout";
 import { UserManagementPage } from "./admin/UserManagementPage";
 import { ProjectManagementPage } from "./admin/ProjectManagementPage";
 import { VisitManagementPage } from "./admin/VisitManagementPage";
+import { AnalyticsDashboardPage } from "./admin/AnalyticsDashboardPage";
 import { BuyerAuthGuard } from "./buyer/BuyerAuthGuard";
 import { BuyerLayout } from "./buyer/BuyerLayout";
 import { BuyerDashboardPage } from "./buyer/BuyerDashboardPage";
@@ -101,6 +102,7 @@ export default function App() {
               <Route path="users" element={<UserManagementPage />} />
               <Route path="projects" element={<ProjectManagementPage />} />
               <Route path="visits" element={<VisitManagementPage />} />
+              <Route path="analytics" element={<AnalyticsDashboardPage />} />
               <Route path="*" element={<Navigate to="/admin" replace />} />
             </Route>
           </Route>
