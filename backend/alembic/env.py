@@ -23,6 +23,7 @@ from app.modules.handoffs import models as handoffs_models  # noqa: F401
 from app.modules.leads import models as leads_models  # noqa: F401
 from app.modules.notifications import models as notifications_models  # noqa: F401
 from app.modules.projects import models as projects_models  # noqa: F401
+from app.modules.settings import models as settings_models  # noqa: F401
 from app.modules.users import models  # noqa: F401
 
 config = context.config

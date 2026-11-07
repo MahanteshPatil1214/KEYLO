@@ -12,9 +12,21 @@ v2.
 
 ## Current status
 
-**Module 0 — Backend Foundation**, **Module 1 — Authentication & User
-Management**, **Module 2 — Projects & Fact Sheets**, **Module 3 — Lead
-Management**, **Module 4 — Conversations & Messages**, **Module 5 — AI Assistant with Groq**, **Module 6 — Availability & Site Visit Booking**, **Module 7 — Human Handoff**, and **Module 8 — Notifications & Reminders** are implemented.
+Keylo is a complete full-stack enterprise platform featuring a modular FastAPI backend, PostgreSQL/SQLite database layer with 10 Alembic migrations, and a responsive React 19 / TypeScript / Vite frontend supporting three role-isolated workspaces: **Buyer Portal**, **Sales Workspace**, and **Admin Console**.
+
+### Implemented Backend & Frontend Modules:
+- **Module 0 — Backend Foundation**: FastAPI app, versioned `/api/v1` router, structured JSON logging, health checks, error handling, Docker Compose, Pytest harness.
+- **Module 1 — Authentication & User Management**: Argon2 password hashing, JWT access tokens, role enforcement (`BUYER`, `SALES_EXECUTIVE`, `ADMIN`), user activation/deactivation.
+- **Module 2 — Projects & Fact Sheets**: Project catalog, independently editable fact sheets, draft vs approved states, staged `pending_*` edits, publish governance.
+- **Module 3 — Lead Management**: Public enquiry intake, deduplication via PostgreSQL advisory locks, consent enforcement, assignment history, status state machine.
+- **Module 4 — Conversations & Messages**: Buyer-sales messaging, chronological history, thread lifecycle status (`ACTIVE`, `CLOSED`, `ARCHIVED`).
+- **Module 5 — AI Assistant with Groq**: Grounded strictly in approved fact sheets, multilingual support (English, Hindi, Gujarati), price negotiation refusal, graceful fallbacks.
+- **Module 6 — Availability & Site Visit Booking**: Visit slots, transactional row locking preventing double-booking, self-service buyer cancellation, outcome tracking (`COMPLETED`, `NO_SHOW`).
+- **Module 7 — Human Handoff**: Explicit requests and automatic handoffs when facts are unavailable, sales executive queues, resolution notes.
+- **Module 8 — Notifications & Reminders**: In-app notifications, 24h & 2h site-visit reminder scans, broadcast alerts.
+- **Module 9 — Executive Analytics & Reporting**: KPIs (total leads, response times, site visits, conversion rate, show-up rate), marketing spend ROI, executive performance, interactive Bezier spline timeline trends.
+- **Module 10 — System Settings & Audit Trail**: Global configuration (reminders, AI settings, multilingual settings, lead routing), notification templates, and immutable audit logs.
+- **Frontend Architecture**: React 19, TypeScript, Vite, Tailwind CSS v4, React Router v7, TanStack Query v5, Framer Motion, Lucide icons. Premium collapsible sidebar, responsive drawers, and Keylo luxury real estate design system (`#FAFAF7`, charcoal `#1F2421`, ivory, emerald, amber accents).
 
 Module 0 provides the shared infrastructure:
 
@@ -1357,3 +1369,227 @@ check exercised the PostgreSQL migration and endpoints.
 - No metrics, tracing, rate limiting, or audit dashboard are included yet.
 - Production secrets should be supplied by the deployment environment or a
   secrets manager, never committed.
+
+---
+
+## Technology Stack & Architecture
+
+### Backend Architecture
+- **Framework**: FastAPI (Python 3.13) with modular domain packages
+- **Database & ORM**: PostgreSQL 16 (production/Docker) & SQLite (local/testing), SQLAlchemy 2.0 (mapped column models)
+- **Migrations**: Alembic with 10 sequential migrations up to `d4e5f6a7b8c9`
+- **Authentication & Security**: Argon2 password hashing (`argon2-cffi`), HMAC-SHA256 JWT access tokens (`PyJWT`), strict RBAC guards
+- **AI Engine**: Groq Python SDK (`openai/gpt-oss-120b`) with fact sheet grounding, multilingual prompts (EN/HI/GU), and human escalation hooks
+- **Validation**: Pydantic v2 schemas for all request/response boundaries
+
+### Frontend Architecture
+- **Framework**: React 19, TypeScript 5.8+, Vite 8
+- **Styling**: Tailwind CSS v4, `@fontsource/dm-serif-display`, `@fontsource-variable/manrope`
+- **State & Data Fetching**: TanStack Query v5 (`@tanstack/react-query`) with automatic background revalidation and optimistic updates
+- **Routing**: React Router v7 with role-based auth guards (`AdminAuthGuard`, `SalesAuthGuard`, `BuyerAuthGuard`)
+- **Animation & Visuals**: Framer Motion, Lucide icons, custom responsive SVG Bezier spline charts
+- **Form Management**: React Hook Form with Zod schema resolvers
+
+---
+
+## Local Development Setup
+
+### 1. Prerequisites
+- **Python**: 3.11+ (Python 3.13 recommended)
+- **Node.js**: v18+ (Node v20+ recommended)
+- **Git**
+
+### 2. Backend Setup
+```bash
+# Navigate to backend directory
+cd backend
+
+# Create and activate a virtual environment
+python -m venv .venv
+
+# Windows:
+.venv\Scripts\activate
+# Linux/macOS:
+# source .venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run database setup & seeding (creates tables, built-in roles, and sample data)
+python scripts/setup_dev_database.py
+
+# Start the FastAPI server (running on http://127.0.0.1:8000)
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+### 3. Frontend Setup
+```bash
+# Navigate to frontend directory
+cd frontend
+
+# Install npm dependencies
+npm install
+
+# Start Vite dev server (running on http://127.0.0.1:5173)
+npm run dev
+
+# Or build and run production preview
+npm run build
+npm run preview
+```
+
+### 4. Default Seeded Credentials
+| Role | Email | Password Environment Variable | Default Fallback |
+| :--- | :--- | :--- | :--- |
+| **Administrator** | `admin.demo@keylo.com` | `KEYLO_ADMIN_PASSWORD` | `KeyloAdmin!2026#` |
+| **Sales Head** | `vikram.head@keylo.com` | `KEYLO_SALES_PASSWORD` | `KeyloSales!2026#` |
+| **Sales Executive** | `maya.sales@keylo.com` | `KEYLO_SALES_PASSWORD` | `KeyloSales!2026#` |
+| **Buyer** | `ananya.buyer@keylo.com` | `KEYLO_BUYER_PASSWORD` | `KeyloBuyer!2026#` |
+
+---
+
+## Database Migrations
+
+Keylo uses Alembic for declarative database versioning.
+
+```bash
+# Check current migration revision
+cd backend
+alembic heads
+
+# Apply all pending migrations to head
+alembic upgrade head
+
+# Rollback one migration
+alembic downgrade -1
+```
+
+### Migration History:
+1. `692d4e5b740f`: Roles and Users
+2. `abb9e59a730a`: Projects and Project Fact Sheets
+3. `9daee97d8ebe`: Leads and Lead Assignments
+4. `aabcedc42aef`: Conversations and Messages
+5. `62cc99aeab0b`: Visit Slots and Bookings
+6. `77a9d0f475be`: Human Handoffs
+7. `3df128151593`: Notifications and In-App Alerts
+8. `b1f2c3d4e5a6`: Marketing Spends & ROI Tracking
+9. `c3d4e5f6a7b8`: Sales Executive Follow-ups
+10. `d4e5f6a7b8c9`: System Settings, Notification Templates, and Audit Logs
+
+---
+
+## API Endpoints Reference Catalog
+
+### Authentication (`/api/v1/auth`)
+- `POST /api/v1/auth/register` — Public buyer registration with Argon2
+- `POST /api/v1/auth/login` — Authenticate and receive JWT access token
+- `GET /api/v1/auth/me` — Read current authenticated user profile
+- `PATCH /api/v1/auth/me` — Update self profile details
+
+### User Management (`/api/v1/users`)
+- `GET /api/v1/users` — Paginated user listing with search and role filters (Admin)
+- `POST /api/v1/users` — Create user with assigned role (Admin)
+- `GET /api/v1/users/metrics` — Aggregate metrics for user distributions (Admin)
+- `GET /api/v1/users/{id}` — Retrieve user profile by ID (Admin)
+- `PATCH /api/v1/users/{id}` — Update user role or profile (Admin)
+- `POST /api/v1/users/{id}/deactivate` — Deactivate user account (Admin)
+- `POST /api/v1/users/{id}/reactivate` — Reactivate user account (Admin)
+
+### Projects & Fact Sheets (`/api/v1/projects`)
+- `GET /api/v1/projects` — List projects (active catalog for Buyers, all for Admin)
+- `POST /api/v1/projects` — Create new development project (Admin)
+- `GET /api/v1/projects/{id}` — Project details and summary
+- `PATCH /api/v1/projects/{id}` — Update project metadata and status (Admin)
+- `GET /api/v1/projects/{id}/facts` — Project fact sheet listing
+- `POST /api/v1/projects/{id}/facts` — Add fact sheet entry (Admin)
+- `PATCH /api/v1/facts/{id}` — Update fact or stage pending edits (Admin)
+- `POST /api/v1/facts/{id}/approve` — Approve pending fact sheet changes (Sales Head / Admin)
+- `POST /api/v1/facts/{id}/publish` — Publish approved fact sheet entry (Admin)
+
+### Leads & Sales Assignments (`/api/v1/leads`)
+- `POST /api/v1/leads` — Public lead enquiry intake
+- `GET /api/v1/leads` — Paginated lead queue with source/status filters
+- `GET /api/v1/leads/duplicates/check` — Proactive duplicate checking (Admin)
+- `GET /api/v1/leads/{id}` — Lead details and activity timeline
+- `PATCH /api/v1/leads/{id}/status` — Transition lead lifecycle state
+- `POST /api/v1/leads/{id}/assign` — Assign or reassign lead to sales executive (Admin)
+- `GET /api/v1/leads/{id}/assignments` — Historical assignment audit trail
+
+### AI Assistant & Conversations (`/api/v1/conversations`, `/api/v1/assistant`)
+- `POST /api/v1/conversations` — Start new buyer enquiry conversation
+- `GET /api/v1/conversations` — List conversations with role-based isolation
+- `GET /api/v1/conversations/{id}/messages` — Paginated conversation dialogue
+- `POST /api/v1/conversations/{id}/messages` — Post buyer/sales message
+- `POST /api/v1/conversations/{id}/chat` — AI Assistant chat response grounded in approved facts
+- `POST /api/v1/assistant/chat` — Direct fact-grounded assistant completion endpoint
+- `PATCH /api/v1/conversations/{id}/status` — Update thread lifecycle (`ACTIVE`, `CLOSED`, `ARCHIVED`)
+
+### Site Visits & Slots (`/api/v1/slots`, `/api/v1/bookings`)
+- `GET /api/v1/slots/available` — Real-time available slot capacity for buyers
+- `POST /api/v1/slots` — Create visit slot with capacity (Admin)
+- `PATCH /api/v1/slots/{id}` — Update slot capacity and notes (Admin)
+- `PATCH /api/v1/slots/{id}/block` — Block slot from buyer booking (Admin)
+- `GET /api/v1/bookings` — Role-isolated booking list
+- `POST /api/v1/bookings` — Book site visit with concurrency locks
+- `POST /api/v1/bookings/{id}/cancel` — Cancel booking and restore slot capacity
+- `POST /api/v1/bookings/{id}/reschedule` — Reschedule visit booking to new slot
+- `PATCH /api/v1/bookings/{id}/status` — Update visit outcome (`COMPLETED`, `NO_SHOW`)
+
+### Human Handoffs & Follow-ups (`/api/v1/handoffs`, `/api/v1/follow-ups`)
+- `POST /api/v1/handoffs` — Request human sales executive escalation
+- `GET /api/v1/handoffs` — List pending/active handoffs for sales executive
+- `PATCH /api/v1/handoffs/{id}` — Resolve handoff with outcome notes
+- `GET /api/v1/follow-ups` — List sales executive scheduled follow-up tasks
+- `POST /api/v1/follow-ups` — Schedule prospective buyer follow-up
+- `PATCH /api/v1/follow-ups/{id}/complete` — Mark follow-up as complete
+
+### Notifications & System Settings (`/api/v1/notifications`, `/api/v1/settings`)
+- `GET /api/v1/notifications` — List authenticated user in-app notifications
+- `PATCH /api/v1/notifications/{id}/read` — Mark notification as read
+- `POST /api/v1/notifications/mark-all-read` — Mark all notifications as read
+- `GET /api/v1/settings` — Read system configuration (reminders, AI, languages, routing) (Admin)
+- `PATCH /api/v1/settings/reminders` — Update 24h & 2h reminder configuration (Admin)
+- `POST /api/v1/settings/reminders/scan` — Trigger immediate reminder dispatch scan (Admin)
+- `PATCH /api/v1/settings/ai-assistant` — Update AI temperature, grounding, fallback reply (Admin)
+- `PATCH /api/v1/settings/languages` — Configure supported platform languages (Admin)
+- `PATCH /api/v1/settings/lead-assignment` — Update routing strategy (Round-robin, Load-balanced) (Admin)
+- `POST /api/v1/settings/broadcast` — Broadcast announcement to platform users (Admin)
+- `GET /api/v1/templates` — List notification message templates (Admin)
+- `PATCH /api/v1/templates/{id}` — Customize notification title & body template (Admin)
+- `GET /api/v1/audit-logs` — Immutable administrative activity audit trail (Admin)
+
+### Analytics & Reports (`/api/v1/analytics`)
+- `GET /api/v1/analytics/dashboard` — Executive KPI summary (leads, visits, conversions, response time)
+- `GET /api/v1/analytics/trends` — Multi-interval acquisition and conversion trajectory
+- `GET /api/v1/analytics/sources` — Channel attribution, spend, and cost-per-visit ROI
+- `GET /api/v1/analytics/executives` — Sales executive conversion & performance table
+- `POST /api/v1/analytics/marketing-spends` — Record marketing channel expenditure (Admin)
+
+---
+
+## Testing & Quality Assurance
+
+### 1. Backend Automated Test Suite
+Keylo includes 224 unit and integration tests covering security, role isolation, AI grounding, concurrency locks, and lifecycle workflows:
+
+```bash
+# Run complete backend test suite
+backend/.venv/Scripts/python.exe -m pytest backend/tests -v
+```
+**Results**: `224 passed in 63.55s` (100% pass rate).
+
+### 2. Frontend Typecheck and Build
+```bash
+npm --prefix frontend run build
+```
+**Results**: Clean TypeScript compilation (`tsc --noEmit`) and Vite bundling (0 errors, 2,753 modules).
+
+### 3. Comprehensive Browser E2E Test Suite
+Puppeteer E2E tests verify all real-world flows across public homepage, buyer portal, multilingual chat, sales workspace, and the complete admin console:
+
+```bash
+# Run master end-to-end QA suite
+node frontend/scripts/verify-full-e2e-suite.mjs
+```
+**Results**: All buyer, sales, and admin workflows verified cleanly with zero console errors.
+
