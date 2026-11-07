@@ -1442,9 +1442,30 @@ npm run preview
 | Role | Email | Password Environment Variable | Default Fallback |
 | :--- | :--- | :--- | :--- |
 | **Administrator** | `admin.demo@keylo.com` | `KEYLO_ADMIN_PASSWORD` | `KeyloAdmin!2026#` |
-| **Sales Head** | `vikram.head@keylo.com` | `KEYLO_SALES_PASSWORD` | `KeyloSales!2026#` |
-| **Sales Executive** | `maya.sales@keylo.com` | `KEYLO_SALES_PASSWORD` | `KeyloSales!2026#` |
-| **Buyer** | `ananya.buyer@keylo.com` | `KEYLO_BUYER_PASSWORD` | `KeyloBuyer!2026#` |
+| **Sales Executive** | `sales.demo@keylo.com` | `KEYLO_SALES_PASSWORD` | `KeyloSales!2026#` |
+| **Buyer** | `buyer.demo@keylo.com` | `KEYLO_BUYER_PASSWORD` | `KeyloBuyer!2026#` |
+
+### 5. Realistic 1-Month Demo Environment (Ahmedabad 2/3 BHK, Oct 7 – Nov 7, 2026)
+To seed or refresh a complete 1-month realistic demonstration environment covering 45 buyers, 3 Ahmedabad residential projects, 125 leads, visit slots, bookings, multilingual AI conversations (English, Hindi, Gujarati), sales follow-ups, human handoffs, and marketing spend analytics:
+
+```bash
+# Seed realistic demo data (idempotent, safe):
+cd backend
+python scripts/prepare_demo_environment.py
+
+# To reset and purge only generated demo records:
+python scripts/prepare_demo_environment.py --reset
+
+# Run automated browser verification suite across all 3 portals:
+node frontend/scripts/verify-demo-environment.mjs
+```
+
+#### Demo Login Credentials:
+| Portal | Role | Email | Default Password | Primary Dashboard |
+| :--- | :--- | :--- | :--- | :--- |
+| **Admin Console** | `ADMIN` | `admin.demo@keylo.com` | `KeyloAdmin!2026#` | `http://127.0.0.1:5173/admin` |
+| **Sales Workspace** | `SALES_EXECUTIVE` | `sales.demo@keylo.com` | `KeyloSales!2026#` | `http://127.0.0.1:5173/sales` |
+| **Buyer Portal** | `BUYER` | `buyer.demo@keylo.com` | `KeyloBuyer!2026#` | `http://127.0.0.1:5173/buyer` |
 
 ---
 
