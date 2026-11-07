@@ -1,6 +1,5 @@
-import { useId, useMemo, useRef, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import {
-  Activity,
   BarChart2,
   Calendar,
   Check,
@@ -23,49 +22,39 @@ type SeriesKey = "leads" | "bookings" | "completed_visits" | "conversions";
 interface SeriesConfig {
   key: SeriesKey;
   label: string;
-  shortLabel: string;
   color: string;
   strokeColor: string;
   fillId: string;
-  dotColor: string;
 }
 
 const SERIES_CONFIGS: SeriesConfig[] = [
   {
     key: "leads",
-    label: "Total Leads",
-    shortLabel: "Leads",
+    label: "Inquiries",
     color: "#1F2421",
     strokeColor: "#1F2421",
-    fillId: "gradient-leads",
-    dotColor: "bg-charcoal",
+    fillId: "gradient-inquiries",
   },
   {
     key: "bookings",
-    label: "Site Bookings",
-    shortLabel: "Bookings",
+    label: "Bookings",
     color: "#2563EB",
     strokeColor: "#2563EB",
     fillId: "gradient-bookings",
-    dotColor: "bg-blue-600",
   },
   {
     key: "completed_visits",
-    label: "Completed Visits",
-    shortLabel: "Visits",
+    label: "Site Visits",
     color: "#059669",
     strokeColor: "#059669",
     fillId: "gradient-visits",
-    dotColor: "bg-emerald-600",
   },
   {
     key: "conversions",
-    label: "Deal Conversions",
-    shortLabel: "Deals",
+    label: "Closed Deals",
     color: "#D97706",
     strokeColor: "#D97706",
     fillId: "gradient-conversions",
-    dotColor: "bg-amber-600",
   },
 ];
 
@@ -99,6 +88,27 @@ function getCurvedAreaPath(points: { x: number; y: number }[], baseY: number): s
   return `${linePath} L ${lastX},${baseY} L ${firstX},${baseY} Z`;
 }
 
+// Calculate uniform, regular Y-axis ticks (e.g. 0, 2, 4, 6, 8, 10)
+function calculateUniformYAxis(rawMax: number): { max: number; ticks: number[] } {
+  let step = 2;
+  if (rawMax <= 5) step = 1;
+  else if (rawMax <= 10) step = 2; // yields [0, 2, 4, 6, 8, 10]
+  else if (rawMax <= 20) step = 4; // yields [0, 4, 8, 12, 16, 20]
+  else if (rawMax <= 30) step = 5; // yields [0, 5, 10, 15, 20, 25, 30]
+  else if (rawMax <= 50) step = 10; // yields [0, 10, 20, 30, 40, 50]
+  else if (rawMax <= 100) step = 20; // yields [0, 20, 40, 60, 80, 100]
+  else if (rawMax <= 200) step = 40;
+  else if (rawMax <= 500) step = 100;
+  else step = Math.ceil(rawMax / 5 / 50) * 50;
+
+  const max = Math.max(step * 4, Math.ceil(rawMax / step) * step);
+  const ticks: number[] = [];
+  for (let v = 0; v <= max; v += step) {
+    ticks.push(v);
+  }
+  return { max, ticks };
+}
+
 export function LeadTrendsChart({
   trends,
   loading,
@@ -106,7 +116,6 @@ export function LeadTrendsChart({
   onGranularityChange,
 }: LeadTrendsChartProps) {
   const chartId = useId();
-  const containerRef = useRef<HTMLDivElement>(null);
 
   const [chartType, setChartType] = useState<"area" | "bars">("area");
   const [activeSeries, setActiveSeries] = useState<Record<SeriesKey, boolean>>({
@@ -120,7 +129,7 @@ export function LeadTrendsChart({
 
   const items = useMemo(() => trends?.items || [], [trends]);
 
-  // Aggregate metrics
+  // Aggregate metric totals
   const totals = useMemo(() => {
     return {
       leads: items.reduce((acc, p) => acc + p.leads, 0),
@@ -132,7 +141,7 @@ export function LeadTrendsChart({
 
   // Identify peak period
   const peakPoint = useMemo(() => {
-    if (items.length === 0) return null;
+    if (items.length <= 1) return null;
     let peak = items[0];
     for (const pt of items) {
       if (pt.leads > peak.leads) peak = pt;
@@ -140,8 +149,8 @@ export function LeadTrendsChart({
     return peak;
   }, [items]);
 
-  // Dynamic max value across visible series
-  const maxValue = useMemo(() => {
+  // Calculate raw maximum across active series
+  const rawMaxValue = useMemo(() => {
     let max = 0;
     for (const p of items) {
       if (activeSeries.leads && p.leads > max) max = p.leads;
@@ -149,17 +158,16 @@ export function LeadTrendsChart({
       if (activeSeries.completed_visits && p.completed_visits > max) max = p.completed_visits;
       if (activeSeries.conversions && p.conversions > max) max = p.conversions;
     }
-    if (max <= 0) max = 10;
-    // Round up to clean integer for nice Y-axis grid
-    if (max <= 10) return 10;
-    if (max <= 25) return 25;
-    if (max <= 50) return 50;
-    if (max <= 100) return 100;
-    return Math.ceil(max / 50) * 50;
+    return max <= 0 ? 10 : max;
   }, [items, activeSeries]);
 
+  // Uniform Y-axis scale and tick marks
+  const { max: yAxisMax, ticks: yTicks } = useMemo(
+    () => calculateUniformYAxis(rawMaxValue),
+    [rawMaxValue],
+  );
+
   const toggleSeries = (key: SeriesKey) => {
-    // Prevent unchecking all series
     const activeCount = Object.values(activeSeries).filter(Boolean).length;
     if (activeCount === 1 && activeSeries[key]) return;
     setActiveSeries((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -167,17 +175,14 @@ export function LeadTrendsChart({
 
   const formatPeriodLabel = (period: string) => {
     if (!period) return "";
-    // If YYYY-MM-DD
     if (/^\d{4}-\d{2}-\d{2}$/.test(period)) {
       const parts = period.split("-");
       const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       return `${parseInt(parts[2], 10)} ${months[parseInt(parts[1], 10) - 1]}`;
     }
-    // If Week e.g. 2026-W44
     if (/^\d{4}-W\d+$/.test(period)) {
       return period.replace("-", " ");
     }
-    // If Month e.g. 2026-11
     if (/^\d{4}-\d{2}$/.test(period)) {
       const parts = period.split("-");
       const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -198,17 +203,16 @@ export function LeadTrendsChart({
   const chartInnerHeight = svgHeight - paddingTop - paddingBottom;
   const baseY = paddingTop + chartInnerHeight;
 
-  // Calculate coordinates for each series
+  // Calculate coordinates for SVG paths
   const seriesPoints = useMemo(() => {
-    if (items.length === 0) return { leads: [], bookings: [], completed_visits: [], conversions: [] };
+    if (items.length <= 1) return { leads: [], bookings: [], completed_visits: [], conversions: [] };
 
     const getX = (index: number) => {
-      if (items.length <= 1) return paddingLeft + chartInnerWidth / 2;
       return paddingLeft + (index / (items.length - 1)) * chartInnerWidth;
     };
 
     const getY = (val: number) => {
-      const ratio = Math.max(0, Math.min(1, val / maxValue));
+      const ratio = Math.max(0, Math.min(1, val / yAxisMax));
       return baseY - ratio * chartInnerHeight;
     };
 
@@ -218,58 +222,57 @@ export function LeadTrendsChart({
       completed_visits: items.map((p, i) => ({ x: getX(i), y: getY(p.completed_visits), val: p.completed_visits })),
       conversions: items.map((p, i) => ({ x: getX(i), y: getY(p.conversions), val: p.conversions })),
     };
-  }, [items, maxValue, chartInnerWidth, chartInnerHeight, baseY, paddingLeft]);
+  }, [items, yAxisMax, chartInnerWidth, chartInnerHeight, baseY, paddingLeft]);
 
-  // Y-axis grid increments (0%, 25%, 50%, 75%, 100%)
-  const yTicks = [0, 0.25, 0.5, 0.75, 1.0].map((frac) => ({
-    value: Math.round(maxValue * frac),
-    y: baseY - frac * chartInnerHeight,
-  }));
+  // SVG Y-gridlines mapping
+  const svgYTicks = useMemo(() => {
+    return yTicks.map((val) => ({
+      value: val,
+      y: baseY - (val / yAxisMax) * chartInnerHeight,
+    }));
+  }, [yTicks, yAxisMax, baseY, chartInnerHeight]);
 
-  const activePoint = hoveredIndex !== null && items[hoveredIndex] ? items[hoveredIndex] : null;
+  const hoveredPoint = hoveredIndex !== null && items[hoveredIndex] ? items[hoveredIndex] : null;
 
-  // Conversion rate calculations
+  // Velocity indicators
   const overallConvRate = totals.leads > 0 ? ((totals.conversions / totals.leads) * 100).toFixed(1) : "0.0";
   const visitShowUpRate = totals.bookings > 0 ? ((totals.completed_visits / totals.bookings) * 100).toFixed(1) : "0.0";
 
   return (
     <div className="flex flex-col rounded-2xl border border-charcoal/10 bg-white p-6 shadow-xs">
-      {/* Top Header & Interactive Controls */}
+      {/* Top Header: Title & Grouped Right Controls */}
       <div className="flex flex-col gap-4 border-b border-charcoal/10 pb-5 lg:flex-row lg:items-center lg:justify-between">
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2.5">
             <h3 className="font-display text-xl font-bold tracking-tight text-charcoal">
               Acquisition & Conversion Trends
             </h3>
-            <span className="inline-flex items-center gap-1 rounded-full border border-charcoal/10 bg-charcoal/5 px-2.5 py-0.5 text-[11px] font-semibold text-charcoal/70">
-              <Activity className="size-3 text-emerald-600" />
-              {items.length} {granularity.toLowerCase()} intervals
-            </span>
             {peakPoint && peakPoint.leads > 0 && (
-              <span className="hidden items-center gap-1 rounded-full border border-amber-500/20 bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-800 sm:inline-flex">
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/20 bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-800">
                 <Sparkles className="size-3 text-amber-600" />
-                Peak: {formatPeriodLabel(peakPoint.period)} ({peakPoint.leads} leads)
+                Peak: {formatPeriodLabel(peakPoint.period)} ({peakPoint.leads} inquiries)
               </span>
             )}
           </div>
           <p className="text-xs text-charcoal/60 leading-relaxed">
-            Multi-tier funnel progression trajectory across inquiries, appointments scheduled, verified site visits, and completed acquisitions.
+            Funnel progression trajectory across inquiries, bookings, site visits, and closed deals.
           </p>
         </div>
 
-        {/* View Style & Granularity Segmented Controls */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Chart Display Mode (Spline Area vs Bars) */}
+        {/* Grouped Controls in Top Right: Display Mode Switch + Granularity Toggle */}
+        <div className="flex flex-wrap items-center gap-2 self-start lg:self-auto">
+          {/* Chart Display Mode Switch */}
           <div className="flex items-center rounded-xl border border-charcoal/15 bg-charcoal/5 p-1 text-xs">
             <button
               type="button"
               onClick={() => setChartType("area")}
+              disabled={items.length <= 1}
               className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-all ${
-                chartType === "area"
+                chartType === "area" && items.length > 1
                   ? "bg-white text-charcoal shadow-xs"
-                  : "text-charcoal/60 hover:text-charcoal"
+                  : "text-charcoal/60 hover:text-charcoal disabled:opacity-40 disabled:cursor-not-allowed"
               }`}
-              title="Smooth Spline Curves"
+              title={items.length <= 1 ? "Requires > 1 interval" : "Smooth Spline Curves"}
             >
               <LineChartIcon className="size-3.5" />
               <span className="hidden sm:inline">Smooth Area</span>
@@ -278,7 +281,7 @@ export function LeadTrendsChart({
               type="button"
               onClick={() => setChartType("bars")}
               className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-all ${
-                chartType === "bars"
+                chartType === "bars" || items.length <= 1
                   ? "bg-white text-charcoal shadow-xs"
                   : "text-charcoal/60 hover:text-charcoal"
               }`}
@@ -309,9 +312,9 @@ export function LeadTrendsChart({
         </div>
       </div>
 
-      {/* Series Filter Chips & Velocity Summary */}
+      {/* Consolidated Metric Filters & Funnel Velocity Strip */}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-b border-charcoal/5 pb-4">
-        {/* Clickable Legend Series Toggles */}
+        {/* Consolidated Interactive Metric Filter Pills (Shows current count & toggles visibility) */}
         <div className="flex flex-wrap items-center gap-2">
           {SERIES_CONFIGS.map((cfg) => {
             const isActive = activeSeries[cfg.key];
@@ -321,23 +324,23 @@ export function LeadTrendsChart({
                 key={cfg.key}
                 type="button"
                 onClick={() => toggleSeries(cfg.key)}
-                className={`inline-flex items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-medium transition-all ${
+                className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-xs font-medium transition-all ${
                   isActive
                     ? "border-charcoal/20 bg-white text-charcoal shadow-xs hover:border-charcoal/40"
                     : "border-charcoal/10 bg-charcoal/5 text-charcoal/40 hover:text-charcoal/70"
                 }`}
-                title={`Toggle ${cfg.label} visibility`}
+                title={`Click to toggle ${cfg.label} visibility on the chart`}
               >
                 <span
-                  className="size-2.5 rounded-full"
+                  className="size-2.5 rounded-full shrink-0"
                   style={{ backgroundColor: isActive ? cfg.color : "#9CA3AF" }}
                 />
-                <span className="font-semibold">{cfg.shortLabel}:</span>
-                <span className="font-mono font-bold">{total.toLocaleString()}</span>
+                <span className="font-semibold text-charcoal">{cfg.label}:</span>
+                <span className="font-mono font-bold text-charcoal">{total.toLocaleString()}</span>
                 {isActive ? (
-                  <Check className="size-3 text-charcoal/50" />
+                  <Check className="size-3 text-charcoal/50 ml-0.5" />
                 ) : (
-                  <EyeOff className="size-3 text-charcoal/40" />
+                  <EyeOff className="size-3 text-charcoal/30 ml-0.5" />
                 )}
               </button>
             );
@@ -358,14 +361,42 @@ export function LeadTrendsChart({
         </div>
       </div>
 
+      {/* Contextual Hover Inspector Slice (Displays active slice details without redundant cards) */}
+      {hoveredPoint && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-charcoal/10 bg-[#FAFAF7] px-4 py-2.5 text-xs transition-all">
+          <div className="flex items-center gap-2">
+            <Calendar className="size-3.5 text-charcoal/60" />
+            <span className="font-semibold text-charcoal">{formatPeriodLabel(hoveredPoint.period)}</span>
+            <span className="font-mono text-[11px] text-charcoal/50">({hoveredPoint.period})</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-4 text-xs">
+            <span className="text-charcoal">
+              Inquiries: <strong className="font-mono font-bold text-charcoal">{hoveredPoint.leads}</strong>
+            </span>
+            <span className="text-blue-900">
+              Bookings: <strong className="font-mono font-bold text-blue-800">{hoveredPoint.bookings}</strong>
+            </span>
+            <span className="text-emerald-900">
+              Site Visits: <strong className="font-mono font-bold text-emerald-800">{hoveredPoint.completed_visits}</strong>
+            </span>
+            <span className="text-amber-900">
+              Closed Deals: <strong className="font-mono font-bold text-amber-800">{hoveredPoint.conversions}</strong>
+            </span>
+            <span className="border-l border-charcoal/15 pl-3 font-semibold text-emerald-700">
+              Conversion: {hoveredPoint.leads > 0 ? `${((hoveredPoint.conversions / hoveredPoint.leads) * 100).toFixed(1)}%` : "0.0%"}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Main Visual Chart Area */}
-      <div className="relative mt-4" ref={containerRef}>
+      <div className="relative mt-4">
         {loading ? (
           <div className="flex h-72 w-full items-center justify-center">
             <div className="flex flex-col items-center gap-2.5">
               <div className="size-7 animate-spin rounded-full border-2 border-charcoal/20 border-t-charcoal" />
               <span className="text-xs font-medium text-charcoal/60">
-                Aggregating multi-tiered acquisition timeline...
+                Aggregating acquisition trends...
               </span>
             </div>
           </div>
@@ -379,8 +410,103 @@ export function LeadTrendsChart({
               Try expanding the date filter preset or switching development projects to review trend progression.
             </p>
           </div>
+        ) : items.length === 1 ? (
+          /* Sparse Data Fallback: Clean Centered Grouped Column Snapshot when data length === 1 */
+          <div className="relative flex flex-col items-center justify-center py-6">
+            <div className="relative w-full max-w-xl rounded-2xl border border-charcoal/10 bg-[#FAFAF7]/80 p-6 shadow-xs">
+              <div className="flex items-center justify-between border-b border-charcoal/10 pb-3 text-xs">
+                <div className="flex items-center gap-2">
+                  <Calendar className="size-3.5 text-charcoal/60" />
+                  <span className="font-semibold text-charcoal">
+                    Interval Snapshot: {formatPeriodLabel(items[0].period)}
+                  </span>
+                </div>
+                <span className="font-mono text-[11px] text-charcoal/50">
+                  {items[0].period}
+                </span>
+              </div>
+
+              {/* Grouped Columns with Uniform Grid Lines */}
+              <div className="relative mt-6 flex h-48 items-end justify-center gap-8 pb-6 pt-4">
+                {/* Horizontal reference grid lines at uniform intervals (0, 2, 4, 6, 8, 10) */}
+                {yTicks.map((tick, i) => (
+                  <div
+                    key={i}
+                    style={{ bottom: `${(tick / yAxisMax) * 100}%` }}
+                    className="pointer-events-none absolute inset-x-0 flex items-center"
+                  >
+                    <span className="w-8 pr-2 text-right font-mono text-[10px] text-charcoal/40">
+                      {tick}
+                    </span>
+                    <div className="flex-1 border-b border-dashed border-charcoal/10" />
+                  </div>
+                ))}
+
+                {/* Centered Columns */}
+                {activeSeries.leads && (
+                  <div className="z-10 flex flex-col items-center gap-1.5">
+                    <span className="font-mono text-xs font-bold text-charcoal">
+                      {items[0].leads}
+                    </span>
+                    <div
+                      style={{
+                        height: `${Math.max(items[0].leads > 0 ? 10 : 0, (items[0].leads / yAxisMax) * 140)}px`,
+                      }}
+                      className="w-12 rounded-t-lg bg-charcoal shadow-xs transition-all hover:brightness-110"
+                    />
+                    <span className="text-[11px] font-semibold text-charcoal/80">Inquiries</span>
+                  </div>
+                )}
+
+                {activeSeries.bookings && (
+                  <div className="z-10 flex flex-col items-center gap-1.5">
+                    <span className="font-mono text-xs font-bold text-blue-800">
+                      {items[0].bookings}
+                    </span>
+                    <div
+                      style={{
+                        height: `${Math.max(items[0].bookings > 0 ? 10 : 0, (items[0].bookings / yAxisMax) * 140)}px`,
+                      }}
+                      className="w-12 rounded-t-lg bg-blue-600 shadow-xs transition-all hover:brightness-110"
+                    />
+                    <span className="text-[11px] font-semibold text-blue-900/80">Bookings</span>
+                  </div>
+                )}
+
+                {activeSeries.completed_visits && (
+                  <div className="z-10 flex flex-col items-center gap-1.5">
+                    <span className="font-mono text-xs font-bold text-emerald-800">
+                      {items[0].completed_visits}
+                    </span>
+                    <div
+                      style={{
+                        height: `${Math.max(items[0].completed_visits > 0 ? 10 : 0, (items[0].completed_visits / yAxisMax) * 140)}px`,
+                      }}
+                      className="w-12 rounded-t-lg bg-emerald-600 shadow-xs transition-all hover:brightness-110"
+                    />
+                    <span className="text-[11px] font-semibold text-emerald-900/80">Site Visits</span>
+                  </div>
+                )}
+
+                {activeSeries.conversions && (
+                  <div className="z-10 flex flex-col items-center gap-1.5">
+                    <span className="font-mono text-xs font-bold text-amber-800">
+                      {items[0].conversions}
+                    </span>
+                    <div
+                      style={{
+                        height: `${Math.max(items[0].conversions > 0 ? 10 : 0, (items[0].conversions / yAxisMax) * 140)}px`,
+                      }}
+                      className="w-12 rounded-t-lg bg-amber-500 shadow-xs transition-all hover:brightness-110"
+                    />
+                    <span className="text-[11px] font-semibold text-amber-900/80">Closed Deals</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
         ) : chartType === "area" ? (
-          /* Smooth SVG Spline Area Chart */
+          /* Smooth SVG Spline Area Chart (Multi-period) */
           <div className="relative w-full overflow-hidden">
             <svg
               viewBox={`0 0 ${svgWidth} ${svgHeight}`}
@@ -389,33 +515,29 @@ export function LeadTrendsChart({
               onMouseLeave={() => setHoveredIndex(null)}
             >
               <defs>
-                {/* Leads gradient */}
-                <linearGradient id={`${chartId}-leads`} x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id={`${chartId}-inquiries`} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#1F2421" stopOpacity="0.22" />
                   <stop offset="100%" stopColor="#1F2421" stopOpacity="0.0" />
                 </linearGradient>
 
-                {/* Bookings gradient */}
                 <linearGradient id={`${chartId}-bookings`} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#2563EB" stopOpacity="0.20" />
                   <stop offset="100%" stopColor="#2563EB" stopOpacity="0.0" />
                 </linearGradient>
 
-                {/* Visits gradient */}
                 <linearGradient id={`${chartId}-visits`} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#059669" stopOpacity="0.22" />
                   <stop offset="100%" stopColor="#059669" stopOpacity="0.0" />
                 </linearGradient>
 
-                {/* Conversions gradient */}
                 <linearGradient id={`${chartId}-conversions`} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#D97706" stopOpacity="0.25" />
                   <stop offset="100%" stopColor="#D97706" stopOpacity="0.0" />
                 </linearGradient>
               </defs>
 
-              {/* Horizontal Reference Grid Lines */}
-              {yTicks.map((tick, i) => (
+              {/* Horizontal Reference Grid Lines at Uniform Intervals (0, 2, 4, 6, 8, 10) */}
+              {svgYTicks.map((tick, i) => (
                 <g key={i}>
                   <line
                     x1={paddingLeft}
@@ -424,11 +546,11 @@ export function LeadTrendsChart({
                     y2={tick.y}
                     stroke="#E5E7EB"
                     strokeWidth="1"
-                    strokeDasharray={i === 0 ? "0" : "3 3"}
+                    strokeDasharray={tick.value === 0 ? "0" : "3 3"}
                   />
                   <text
                     x={paddingLeft - 8}
-                    y={tick.y + 4}
+                    y={tick.y + 3.5}
                     textAnchor="end"
                     fontSize="10"
                     fill="#9CA3AF"
@@ -439,11 +561,11 @@ export function LeadTrendsChart({
                 </g>
               ))}
 
-              {/* Area Fills (Rendered back-to-front) */}
+              {/* Area Fills */}
               {activeSeries.leads && (
                 <path
                   d={getCurvedAreaPath(seriesPoints.leads, baseY)}
-                  fill={`url(#${chartId}-leads)`}
+                  fill={`url(#${chartId}-inquiries)`}
                   className="transition-opacity duration-300"
                 />
               )}
@@ -514,7 +636,6 @@ export function LeadTrendsChart({
               {/* Interactive Vertical Guideline & Points */}
               {hoveredIndex !== null && seriesPoints.leads[hoveredIndex] && (
                 <g>
-                  {/* Vertical Guideline */}
                   <line
                     x1={seriesPoints.leads[hoveredIndex].x}
                     y1={paddingTop}
@@ -526,7 +647,6 @@ export function LeadTrendsChart({
                     className="opacity-70"
                   />
 
-                  {/* Highlight dots on the hovered interval */}
                   {activeSeries.leads && (
                     <circle
                       cx={seriesPoints.leads[hoveredIndex].x}
@@ -535,7 +655,6 @@ export function LeadTrendsChart({
                       fill="#1F2421"
                       stroke="#FFFFFF"
                       strokeWidth="2"
-                      className="shadow-sm"
                     />
                   )}
                   {activeSeries.bookings && (
@@ -573,7 +692,6 @@ export function LeadTrendsChart({
 
               {/* X-axis labels along bottom */}
               {items.map((pt, i) => {
-                // To prevent label crowding, show every step or skip every 2nd if > 14 items
                 const skipFactor = items.length > 20 ? 3 : items.length > 12 ? 2 : 1;
                 const shouldShowLabel = i % skipFactor === 0 || i === items.length - 1;
                 const x = seriesPoints.leads[i]?.x ?? 0;
@@ -593,7 +711,7 @@ export function LeadTrendsChart({
                       </text>
                     )}
 
-                    {/* Interactive Invisible Overlay Slice for Easy Hovering */}
+                    {/* Interactive Overlay Slice */}
                     <rect
                       x={
                         i === 0
@@ -620,7 +738,7 @@ export function LeadTrendsChart({
             </svg>
           </div>
         ) : (
-          /* Segmented Columns Mode (Polished Modern Bars) */
+          /* Segmented Columns Mode (Multi-period) */
           <div className="relative">
             <div className="flex h-72 items-end gap-2 overflow-x-auto pb-8 pt-6 px-2">
               {items.map((pt, index) => {
@@ -640,16 +758,16 @@ export function LeadTrendsChart({
                       {activeSeries.leads && (
                         <div
                           style={{
-                            height: `${Math.max(pt.leads > 0 ? 6 : 0, (pt.leads / maxValue) * 100)}%`,
+                            height: `${Math.max(pt.leads > 0 ? 6 : 0, (pt.leads / yAxisMax) * 100)}%`,
                           }}
                           className="w-2 sm:w-2.5 rounded-t-md bg-charcoal transition-all group-hover:brightness-125"
-                          title={`Leads: ${pt.leads}`}
+                          title={`Inquiries: ${pt.leads}`}
                         />
                       )}
                       {activeSeries.bookings && (
                         <div
                           style={{
-                            height: `${Math.max(pt.bookings > 0 ? 6 : 0, (pt.bookings / maxValue) * 100)}%`,
+                            height: `${Math.max(pt.bookings > 0 ? 6 : 0, (pt.bookings / yAxisMax) * 100)}%`,
                           }}
                           className="w-2 sm:w-2.5 rounded-t-md bg-blue-600 transition-all group-hover:brightness-125"
                           title={`Bookings: ${pt.bookings}`}
@@ -658,19 +776,19 @@ export function LeadTrendsChart({
                       {activeSeries.completed_visits && (
                         <div
                           style={{
-                            height: `${Math.max(pt.completed_visits > 0 ? 6 : 0, (pt.completed_visits / maxValue) * 100)}%`,
+                            height: `${Math.max(pt.completed_visits > 0 ? 6 : 0, (pt.completed_visits / yAxisMax) * 100)}%`,
                           }}
                           className="w-2 sm:w-2.5 rounded-t-md bg-emerald-600 transition-all group-hover:brightness-125"
-                          title={`Completed Visits: ${pt.completed_visits}`}
+                          title={`Site Visits: ${pt.completed_visits}`}
                         />
                       )}
                       {activeSeries.conversions && (
                         <div
                           style={{
-                            height: `${Math.max(pt.conversions > 0 ? 6 : 0, (pt.conversions / maxValue) * 100)}%`,
+                            height: `${Math.max(pt.conversions > 0 ? 6 : 0, (pt.conversions / yAxisMax) * 100)}%`,
                           }}
                           className="w-2 sm:w-2.5 rounded-t-md bg-amber-500 transition-all group-hover:brightness-125"
-                          title={`Conversions: ${pt.conversions}`}
+                          title={`Closed Deals: ${pt.conversions}`}
                         />
                       )}
                     </div>
@@ -682,75 +800,6 @@ export function LeadTrendsChart({
                   </div>
                 );
               })}
-            </div>
-          </div>
-        )}
-
-        {/* Floating Luxury Glassmorphism Tooltip Card */}
-        {activePoint && (
-          <div className="pointer-events-none mt-3 rounded-2xl border border-charcoal/15 bg-white/95 p-4 shadow-xl backdrop-blur-md transition-all">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-charcoal/10 pb-2.5 text-xs">
-              <div className="flex items-center gap-2">
-                <Calendar className="size-3.5 text-charcoal/60" />
-                <span className="font-semibold text-charcoal">
-                  {formatPeriodLabel(activePoint.period)}
-                </span>
-                <span className="font-mono text-[11px] text-charcoal/50">
-                  ({activePoint.period})
-                </span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-[11px] text-charcoal/60">
-                  Period Conversion:{" "}
-                  <strong className="text-emerald-700 font-bold">
-                    {activePoint.leads > 0
-                      ? `${((activePoint.conversions / activePoint.leads) * 100).toFixed(1)}%`
-                      : "0.0%"}
-                  </strong>
-                </span>
-              </div>
-            </div>
-
-            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4 text-xs">
-              <div className="flex items-center gap-2 rounded-xl bg-charcoal/5 p-2">
-                <span className="size-2 rounded-full bg-charcoal" />
-                <div>
-                  <p className="text-[10px] text-charcoal/60 uppercase">Inquiries</p>
-                  <p className="font-mono font-bold text-charcoal">
-                    {activePoint.leads.toLocaleString()}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 rounded-xl bg-blue-50/60 p-2">
-                <span className="size-2 rounded-full bg-blue-600" />
-                <div>
-                  <p className="text-[10px] text-blue-900/60 uppercase">Bookings</p>
-                  <p className="font-mono font-bold text-blue-800">
-                    {activePoint.bookings.toLocaleString()}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 rounded-xl bg-emerald-50/60 p-2">
-                <span className="size-2 rounded-full bg-emerald-600" />
-                <div>
-                  <p className="text-[10px] text-emerald-900/60 uppercase">Tours Held</p>
-                  <p className="font-mono font-bold text-emerald-800">
-                    {activePoint.completed_visits.toLocaleString()}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 rounded-xl bg-amber-50/60 p-2">
-                <span className="size-2 rounded-full bg-amber-600" />
-                <div>
-                  <p className="text-[10px] text-amber-900/60 uppercase">Deals Closed</p>
-                  <p className="font-mono font-bold text-amber-800">
-                    {activePoint.conversions.toLocaleString()}
-                  </p>
-                </div>
-              </div>
             </div>
           </div>
         )}

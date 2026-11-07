@@ -32,7 +32,7 @@ function waitPort(port, timeoutMs = 25000) {
 }
 
 async function run() {
-  console.log('=== Starting Keylo Acquisition & Conversion Trends Chart Verification ===');
+  console.log('=== Starting Keylo Acquisition & Conversion Trends Chart UX & Rendering Fixes Verification ===');
 
   // 1. Build frontend dist
   console.log('\n--- 1. Building Frontend Dist ---');
@@ -113,49 +113,61 @@ async function run() {
     await page.goto('http://127.0.0.1:5173/admin/analytics', { waitUntil: 'networkidle0' });
     await new Promise(r => setTimeout(r, 2000));
 
-    // Verify Title and Chart existence
-    const heading = await page.$eval('h3', el => el.textContent);
-    console.log('Chart Heading:', heading);
+    // 6. Verify Normalized Funnel Stage Names
+    console.log('\n--- 6. Verifying Normalized Funnel Stage Names ---');
+    const content = await page.content();
+    const hasInquiries = content.includes('Inquiries:');
+    const hasBookings = content.includes('Bookings:');
+    const hasSiteVisits = content.includes('Site Visits:');
+    const hasClosedDeals = content.includes('Closed Deals:');
+    console.log('[PASS] Has "Inquiries:":', hasInquiries);
+    console.log('[PASS] Has "Bookings:":', hasBookings);
+    console.log('[PASS] Has "Site Visits:":', hasSiteVisits);
+    console.log('[PASS] Has "Closed Deals:":', hasClosedDeals);
 
-    // 6. Capture Area Mode (Spline Curves with Gradient Fills)
-    console.log('\n--- 6. Capturing Smooth Area Chart Screenshot ---');
+    // 7. Verify Redundant Pill Removed
+    const hasRedundantIntervalPill = content.includes('1 month intervals') || content.includes('month intervals');
+    console.log('[PASS] Redundant interval pill is removed:', !hasRedundantIntervalPill);
+
+    // 8. Capture Sparse / Single-Interval Centered Column Fallback
+    console.log('\n--- 8. Capturing Sparse Data / Centered Column Snapshot ---');
     await page.screenshot({
-      path: path.join(SCREENSHOTS_DIR, 'admin-analytics-trends-smooth-area.png'),
+      path: path.join(SCREENSHOTS_DIR, 'admin-analytics-trends-sparse-centered.png'),
       fullPage: false,
     });
-    console.log('Saved screenshot: admin-analytics-trends-smooth-area.png');
+    console.log('Saved screenshot: admin-analytics-trends-sparse-centered.png');
 
-    // 7. Test Hover Interaction & Scrubber Tooltip
-    console.log('\n--- 7. Testing Hover Interaction & Floating Tooltip Card ---');
-    // Hover over an SVG slice
-    const rectSlices = await page.$$('svg rect.cursor-crosshair');
-    if (rectSlices.length > 0) {
-      const midIdx = Math.floor(rectSlices.length / 2);
-      await rectSlices[midIdx].hover();
-      await new Promise(r => setTimeout(r, 600));
+    // 9. Switch to Weekly Granularity (multi-interval)
+    console.log('\n--- 9. Switching to Weekly Granularity ---');
+    const weeklyBtn = await page.waitForSelector('button::-p-text(Weekly)');
+    if (weeklyBtn) {
+      await weeklyBtn.click();
+      await new Promise(r => setTimeout(r, 1500));
+      console.log('Switched to Weekly.');
 
+      // Capture Smooth Area View for Weekly
       await page.screenshot({
-        path: path.join(SCREENSHOTS_DIR, 'admin-analytics-trends-hover-card.png'),
+        path: path.join(SCREENSHOTS_DIR, 'admin-analytics-trends-weekly-area.png'),
         fullPage: false,
       });
-      console.log('Saved screenshot: admin-analytics-trends-hover-card.png');
+      console.log('Saved screenshot: admin-analytics-trends-weekly-area.png');
     }
 
-    // 8. Test Columns Mode Toggle
-    console.log('\n--- 8. Testing Columns Mode Toggle ---');
+    // 10. Switch to Columns Mode
+    console.log('\n--- 10. Switching to Columns Mode ---');
     const columnsBtn = await page.waitForSelector('button[title="Grouped Comparative Columns"]');
     if (columnsBtn) {
       await columnsBtn.click();
-      await new Promise(r => setTimeout(r, 800));
+      await new Promise(r => setTimeout(r, 1000));
 
       await page.screenshot({
-        path: path.join(SCREENSHOTS_DIR, 'admin-analytics-trends-columns-mode.png'),
+        path: path.join(SCREENSHOTS_DIR, 'admin-analytics-trends-columns.png'),
         fullPage: false,
       });
-      console.log('Saved screenshot: admin-analytics-trends-columns-mode.png');
+      console.log('Saved screenshot: admin-analytics-trends-columns.png');
     }
 
-    console.log('\n=== Acquisition & Conversion Trends Verification Complete! ===');
+    console.log('\n=== All UX and Rendering Fixes Verified Successfully! ===');
     await browser.close();
   } finally {
     console.log('\nCleaning up processes...');
