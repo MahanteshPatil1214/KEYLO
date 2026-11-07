@@ -1,5 +1,9 @@
 <p align="center">
-  <img src="docs/assets/keylo-logo.png" alt="Keylo Logo" width="220" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/keylo-logo-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/keylo-logo-light.png">
+    <img src="docs/assets/keylo-logo.png" alt="Keylo Logo" width="220" />
+  </picture>
 </p>
 
 <h3 align="center">Conversational Real Estate Sales & Site Visit Automation Platform</h3>
