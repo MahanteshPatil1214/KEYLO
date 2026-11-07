@@ -453,17 +453,6 @@ export function AdminLayout() {
                 </span>
               </div>
             </div>
-
-            {/* Top Bar Quick Sign Out */}
-            <button
-              type="button"
-              onClick={handleSignOut}
-              className="hidden items-center gap-1.5 rounded-lg border border-charcoal/15 bg-white/80 px-2.5 py-1.5 text-xs font-semibold text-charcoal/75 transition-colors hover:border-charcoal/30 hover:bg-white hover:text-charcoal sm:inline-flex"
-              title="Sign out of Admin Console"
-            >
-              <LogOut className="size-3.5" />
-              <span className="hidden sm:inline">Sign out</span>
-            </button>
           </div>
         </header>
 
