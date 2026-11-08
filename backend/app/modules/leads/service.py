@@ -35,6 +35,7 @@ from app.modules.leads.schemas import (
     LeadAssignRequest,
     LeadCreateRequest,
     LeadListResponse,
+    LeadOptOutRequest,
     LeadResponse,
     LeadStatusUpdateRequest,
     LeadUpdateRequest,
@@ -283,6 +284,7 @@ def create_lead(
             budget_max=payload.budget_max,
             preferred_configuration=payload.preferred_configuration,
             consent_to_contact=payload.consent_to_contact,
+            opted_out=not payload.consent_to_contact,
         )
         session.add(lead)
         try:
@@ -507,10 +509,69 @@ def update_lead_status(
     ):
         raise LeadConsentRequiredError(requested.value.lower().replace("_", " "))
 
+    if lead.opted_out and requested in _CONTACT_REQUIRING_STATUSES:
+        raise LeadConsentRequiredError(requested.value.lower().replace("_", " "))
+
     lead.status = requested.value
     session.commit()
     session.refresh(lead)
     return _lead_response(lead)
+
+
+def opt_out_lead(
+    session: Session,
+    *,
+    actor: User,
+    lead_id: UUID,
+    payload: LeadOptOutRequest,
+) -> LeadResponse:
+    """Withdraw contact consent for a lead (DPDP opt-out).
+
+    Any authenticated caller may opt out their own lead. Sales executives and
+    admins may opt out any lead they can see. Once opted out, no further
+    contact (notifications, reminders, follow-ups, booking confirmations) may
+    be initiated to the buyer for this lead.
+    """
+
+    lead = repository.get_lead_by_id(session, lead_id)
+    if lead is None:
+        raise LeadNotFoundError()
+
+    _require_lead_manager_or_buyer(actor, lead)
+
+    if lead.opted_out:
+        return _lead_response(lead)
+
+    now = utcnow()
+    lead.opted_out = True
+    lead.opted_out_at = now
+    lead.opted_out_reason = payload.reason
+    lead.consent_to_contact = False
+    lead.updated_at = now
+
+    try:
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+
+    session.refresh(lead)
+    return _lead_response(lead)
+
+
+def _require_lead_manager_or_buyer(actor: User, lead: Lead) -> None:
+    """Allow admins, sales executives (for assigned leads), or the buyer
+    (matched by email) to opt out a lead."""
+
+    if actor.role.name in (RoleName.ADMIN.value, RoleName.SALES_EXECUTIVE.value):
+        _require_lead_manager(actor)
+        return
+
+    # Buyers may opt out a lead whose email matches their own.
+    if actor.email and lead.email and actor.email.lower() == lead.email.lower():
+        return
+
+    raise LeadNotFoundError()
 
 
 def assign_lead(
@@ -527,6 +588,9 @@ def assign_lead(
     if lead is None:
         raise LeadNotFoundError()
     if not lead.consent_to_contact:
+        raise LeadConsentRequiredError("lead assignment")
+
+    if lead.opted_out:
         raise LeadConsentRequiredError("lead assignment")
 
     executive = users_repository.get_user_by_id(session, payload.executive_id)

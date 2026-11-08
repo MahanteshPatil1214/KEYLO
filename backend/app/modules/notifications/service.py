@@ -207,8 +207,11 @@ def notify_booking_confirmed(
         else "the scheduled time"
     )
 
-    # 1. Notify Buyer (if consent granted)
-    if booking.buyer_id and (booking.lead is None or booking.lead.consent_to_contact):
+    # 1. Notify Buyer (if consent granted and not opted out)
+    if booking.buyer_id and (
+        booking.lead is None
+        or (booking.lead.consent_to_contact and not booking.lead.opted_out)
+    ):
         buyer_idempotency = f"booking_confirmed_{booking.id}_{booking.buyer_id}"
         buyer_title = "Site Visit Confirmed"
         buyer_message = (
@@ -268,8 +271,11 @@ def notify_booking_cancelled(
         else "the scheduled time"
     )
 
-    # 1. Notify Buyer
-    if booking.buyer_id and (booking.lead is None or booking.lead.consent_to_contact):
+    # 1. Notify Buyer (if consent granted and not opted out)
+    if booking.buyer_id and (
+        booking.lead is None
+        or (booking.lead.consent_to_contact and not booking.lead.opted_out)
+    ):
         buyer_idempotency = f"booking_cancelled_{booking.id}_{booking.buyer_id}"
         buyer_title = "Site Visit Cancelled"
         buyer_message = (

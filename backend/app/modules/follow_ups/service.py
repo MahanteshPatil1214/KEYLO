@@ -84,6 +84,12 @@ def create_follow_up(
                 detail="Sales executives can only create follow-ups for assigned leads.",
             )
 
+    if lead.opted_out:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This lead has opted out of contact. Follow-ups cannot be created.",
+        )
+
     now = datetime.now(UTC)
     scheduled_utc = _as_utc(payload.scheduled_at)
 

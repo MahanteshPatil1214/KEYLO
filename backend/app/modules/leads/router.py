@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.db.session import get_db
-from app.modules.auth.dependencies import AdminUser, require_roles
+from app.modules.auth.dependencies import AdminUser, CurrentUser, require_roles
 from app.modules.leads.exceptions import LeadCreateRateLimitedError
 from app.modules.leads.models import LeadSource, LeadStatus
 from app.modules.leads.schemas import (
@@ -24,6 +24,7 @@ from app.modules.leads.schemas import (
     LeadAssignRequest,
     LeadCreateRequest,
     LeadListResponse,
+    LeadOptOutRequest,
     LeadResponse,
     LeadStatusUpdateRequest,
     LeadUpdateRequest,
@@ -35,6 +36,7 @@ from app.modules.leads.service import (
     get_lead,
     list_lead_assignments,
     list_leads,
+    opt_out_lead,
     update_lead,
     update_lead_status,
 )
@@ -218,6 +220,54 @@ def update_lead_status_endpoint(
         actor=current_user,
         lead_id=lead_id,
         payload=payload,
+    )
+
+
+@router.post(
+    "/{lead_id}/opt-out",
+    response_model=LeadResponse,
+    summary="Withdraw contact consent (DPDP opt-out)",
+)
+def opt_out_lead_endpoint(
+    lead_id: UUID,
+    payload: LeadOptOutRequest,
+    current_user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+) -> LeadResponse:
+    """Withdraw contact consent for a lead (DPDP right to opt out).
+
+    Buyers may opt out their own lead (matched by email). Sales executives and
+    administrators may opt out any lead they are authorised to see.
+    Once opted out, no further contact is initiated for this lead.
+    """
+
+    return opt_out_lead(
+        db,
+        actor=current_user,
+        lead_id=lead_id,
+        payload=payload,
+    )
+
+
+@router.get(
+    "/opted-out",
+    response_model=LeadListResponse,
+    summary="List opted-out leads (admin only)",
+)
+def list_opted_out_leads_endpoint(
+    admin: AdminUser,
+    db: Annotated[Session, Depends(get_db)],
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> LeadListResponse:
+    """Return leads that have withdrawn contact consent (DPDP opt-out register)."""
+
+    return list_leads(
+        db,
+        actor=admin,
+        page=page,
+        page_size=page_size,
+        status=None,
     )
 
 

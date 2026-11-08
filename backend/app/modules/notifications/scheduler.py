@@ -59,7 +59,7 @@ def process_due_reminders(
 
         # Buyer consent check
         buyer_consent = (
-            booking.lead.consent_to_contact
+            booking.lead.consent_to_contact and not booking.lead.opted_out
             if getattr(booking, "lead", None) is not None
             else True
         )

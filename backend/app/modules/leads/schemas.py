@@ -249,6 +249,9 @@ class LeadResponse(BaseModel):
     budget_max: int | None = None
     preferred_configuration: str | None = None
     consent_to_contact: bool
+    opted_out: bool
+    opted_out_at: datetime | None = None
+    opted_out_reason: str | None = None
     assigned_executive_id: UUID | None = None
     assigned_at: datetime | None = None
     created_at: datetime
@@ -299,3 +302,11 @@ class LeadAssignmentListResponse(BaseModel):
     page: int
     page_size: int
     pages: int
+
+
+class LeadOptOutRequest(BaseModel):
+    """Buyer request to withdraw contact consent (DPDP opt-out)."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    reason: str | None = Field(default=None, max_length=500)
