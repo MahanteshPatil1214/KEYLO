@@ -40,11 +40,6 @@ const loginSchema = z.object({
     .email("Enter a valid email address."),
   password: z.string().min(1, "Enter your password."),
   remember: z.boolean(),
-  privacyConsent: z
-    .boolean()
-    .refine((v) => v === true, {
-      message: "You must agree to the privacy policy to continue.",
-    }),
 });
 
 type LoginValues = z.infer<typeof loginSchema>;
@@ -78,7 +73,6 @@ export function LoginPage() {
       email: initialEmail,
       password: "",
       remember: Boolean(initialEmail),
-      privacyConsent: false,
     },
     mode: "onTouched",
   });
@@ -319,39 +313,6 @@ export function LoginPage() {
           >
             Forgot password?
           </a>
-        </div>
-
-        <div className="mt-3">
-          <label className="flex items-start gap-2.5 cursor-pointer text-sm leading-6 text-charcoal/70">
-            <input
-              id="privacy-consent"
-              type="checkbox"
-              className="mt-1 size-4 cursor-pointer rounded border-charcoal/30 accent-forest shrink-0"
-              {...register("privacyConsent")}
-            />
-            <span>
-              I agree to the{" "}
-              <Link
-                to="/privacy"
-                className="font-semibold text-forest underline-offset-4 transition-colors duration-200 hover:text-forest-deep hover:underline"
-              >
-                Privacy Policy
-              </Link>
-              {" and how Keylo handles my personal data."}
-            </span>
-          </label>
-          {errors.privacyConsent ? (
-            <p
-              id="privacy-consent-error"
-              className="mt-2 flex items-start gap-1.5 text-sm leading-5 text-clay"
-            >
-              <AlertCircle
-                aria-hidden="true"
-                className="mt-0.5 size-3.5 shrink-0"
-              />
-              {errors.privacyConsent.message}
-            </p>
-          ) : null}
         </div>
 
         <button
