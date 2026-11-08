@@ -123,6 +123,9 @@ def create_slot(
         start_time=payload.start_time,
         end_time=payload.end_time,
         capacity=payload.capacity,
+        address=payload.address,
+        latitude=payload.latitude,
+        longitude=payload.longitude,
         notes=payload.notes,
         is_active=payload.is_active,
         created_at=now,
@@ -167,6 +170,12 @@ def update_slot(
         slot.capacity = payload.capacity
     if payload.notes is not None:
         slot.notes = payload.notes
+    if payload.address is not None:
+        slot.address = payload.address
+    if payload.latitude is not None:
+        slot.latitude = payload.latitude
+    if payload.longitude is not None:
+        slot.longitude = payload.longitude
     if payload.is_active is not None:
         slot.is_active = payload.is_active
 
@@ -297,6 +306,9 @@ def get_available_slots(
                     start_time=slot.start_time,
                     end_time=slot.end_time,
                     capacity=slot.capacity,
+                    address=slot.address,
+                    latitude=slot.latitude,
+                    longitude=slot.longitude,
                     booked_count=booked_count,
                     available_capacity=available_capacity,
                     notes=slot.notes,

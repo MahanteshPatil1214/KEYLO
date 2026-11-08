@@ -78,10 +78,18 @@ services:
     ports:
       - "5173:5173"
     environment:
-      VITE_API_BASE_URL: http://backend:8000/api/v1
-    # Volume mount for hot module replacement (HMR)
+      VITE_API_BASE_URL: http://localhost:8000/api/v1
+    # Volume mounts for hot module replacement (HMR).
+    # NOTE: /app must NOT be covered by a directory bind mount, otherwise
+    # Docker cannot create the /app/.vite and /app/node_modules mountpoints
+    # beneath it ("read-only file system"). Bind only the source files/dirs
+    # Vite needs at runtime; node_modules and the .vite cache still come from
+    # volumes seeded from the image layer.
     volumes:
-      - ./frontend:/app:ro
+      - ./frontend/index.html:/app/index.html:ro
+      - ./frontend/vite.config.ts:/app/vite.config.ts:ro
+      - ./frontend/src:/app/src:ro
+      - ./frontend/public:/app/public:ro
       - /app/node_modules
       - keylo_frontend_cache:/app/.vite
 

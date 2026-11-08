@@ -98,6 +98,51 @@ class GroqClient:
             logger.error("Unexpected error during Groq API call: %s", exc)
             raise GroqAPIError(str(exc)) from exc
 
+    def generate_chat_completion_with_tools(
+        self,
+        *,
+        system_prompt: str,
+        messages: list[dict[str, str]],
+        tools: list[dict[str, Any]],
+        tool_choice: str | dict[str, Any] = "auto",
+        temperature: float = 0.2,
+    ) -> Any:
+        """Call Groq with function-calling tools and return the raw response.
+
+        Returns the Groq completion response object. The caller inspects
+        ``response.choices[0].message.tool_calls`` to decide whether the
+        assistant wants to invoke a tool.
+        """
+
+        client = self._get_client()
+        formatted_messages = [
+            {"role": "system", "content": system_prompt}
+        ] + messages
+
+        try:
+            response = client.chat.completions.create(
+                model=self.model,
+                messages=formatted_messages,
+                temperature=temperature,
+                tools=tools,
+                tool_choice=tool_choice,
+            )
+            if not response.choices:
+                raise GroqAPIError("No completion choices returned by Groq.")
+            return response
+        except APITimeoutError as exc:
+            logger.warning("Groq API request timed out: %s", exc)
+            raise GroqTimeoutError(str(exc)) from exc
+        except RateLimitError as exc:
+            logger.warning("Groq API rate limit exceeded: %s", exc)
+            raise GroqRateLimitError(str(exc)) from exc
+        except GroqError as exc:
+            logger.warning("Groq API error: %s", exc)
+            raise GroqAPIError(str(exc)) from exc
+        except Exception as exc:
+            logger.error("Unexpected error during Groq tool-enabled call: %s", exc)
+            raise GroqAPIError(str(exc)) from exc
+
 
 def get_groq_client() -> GroqClient:
     """Factory creating a GroqClient from application settings."""

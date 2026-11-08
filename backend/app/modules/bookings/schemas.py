@@ -19,6 +19,9 @@ class VisitSlotCreateRequest(BaseModel):
     start_time: datetime
     end_time: datetime
     capacity: int = Field(default=1, ge=1, le=50)
+    address: str | None = Field(default=None, max_length=500)
+    latitude: float | None = None
+    longitude: float | None = None
     notes: str | None = Field(default=None, max_length=500)
     is_active: bool = True
 
@@ -37,6 +40,9 @@ class VisitSlotUpdateRequest(BaseModel):
     start_time: datetime | None = None
     end_time: datetime | None = None
     capacity: int | None = Field(default=None, ge=1, le=50)
+    address: str | None = Field(default=None, max_length=500)
+    latitude: float | None = None
+    longitude: float | None = None
     notes: str | None = Field(default=None, max_length=500)
     is_active: bool | None = None
 
@@ -58,6 +64,9 @@ class VisitSlotResponse(BaseModel):
     start_time: datetime
     end_time: datetime
     capacity: int
+    address: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
     is_active: bool
     notes: str | None
     created_at: datetime
@@ -75,6 +84,9 @@ class VisitSlotResponse(BaseModel):
             start_time=slot.start_time,
             end_time=slot.end_time,
             capacity=slot.capacity,
+            address=slot.address,
+            latitude=slot.latitude,
+            longitude=slot.longitude,
             is_active=slot.is_active,
             notes=slot.notes,
             created_at=slot.created_at,
@@ -95,6 +107,9 @@ class AvailableSlotResponse(BaseModel):
     start_time: datetime
     end_time: datetime
     capacity: int
+    address: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
     booked_count: int
     available_capacity: int
     notes: str | None

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -18,6 +20,7 @@ from app.modules.ai_assistant.prompts import (
     UNCONFIGURED_ASSISTANT_REPLY,
     build_system_message,
 )
+from app.modules.ai_assistant.tools import BOOKING_TOOLS, BOOKING_TOOL_IMPLS
 from app.modules.ai_assistant.schemas import ChatResponse
 from app.modules.conversations import repository as conversations_repository
 from app.modules.conversations.exceptions import (
@@ -163,17 +166,36 @@ def chat(
     # Append current buyer message
     dialog_messages.append({"role": "user", "content": buyer_message.content})
 
-    # 5. Build system prompt and call Groq
+    # 5. Build system prompt and call Groq (with booking tools when applicable)
     system_prompt = build_system_message(approved_facts, project_name=project_name)
 
     client = groq_client if groq_client is not None else get_groq_client()
     assistant_reply_text: str
+    tools_used: bool = False
+
+    # Tool-enabled path: buyer chats and Groq is configured → assistant may call
+    # get_available_slots / book_site_visit to check and reserve real free slots.
+    use_tools = (
+        client.is_configured
+        and actor.role.name == RoleName.BUYER.value
+    )
 
     if not client.is_configured:
         logger.warning(
             "Groq API key not configured; generating graceful unconfigured response."
         )
         assistant_reply_text = UNCONFIGURED_ASSISTANT_REPLY
+    elif use_tools:
+        assistant_reply_text = _run_tool_chat_loop(
+            session=session,
+            client=client,
+            actor=actor,
+            conversation=conversation,
+            system_prompt=system_prompt,
+            dialog_messages=dialog_messages,
+            temperature=settings.assistant_temperature,
+        )
+        tools_used = True
     else:
         try:
             assistant_reply_text = client.generate_chat_completion(
@@ -213,7 +235,10 @@ def chat(
         )
     ):
         handoff_reason = HandoffReason.BUYER_REQUESTED
-    elif not approved_facts or _indicates_fact_unavailable(assistant_reply_text):
+    elif (
+        not tools_used
+        and (not approved_facts or _indicates_fact_unavailable(assistant_reply_text))
+    ):
         handoff_reason = HandoffReason.FACT_UNAVAILABLE
 
     if handoff_reason is not None:
@@ -233,4 +258,112 @@ def chat(
         assistant_message=assistant_message,
         reply=assistant_message.content,
     )
+
+
+def _run_tool_chat_loop(
+    *,
+    session: Session,
+    client: GroqClient,
+    actor: User,
+    conversation,
+    system_prompt: str,
+    dialog_messages: list[dict[str, str]],
+    temperature: float,
+    max_tool_rounds: int = 5,
+) -> str:
+    """Run a tool-enabled conversation loop with Groq.
+
+    Calls Groq with booking tools defined. When the assistant requests a tool
+    call, executes it (checking free slots or booking a visit), feeds the
+    result back, and continues until Groq returns a final text answer or the
+    round limit is reached.
+    """
+
+    current_messages: list[dict[str, Any]] = list(dialog_messages)
+
+    for _round in range(max_tool_rounds):
+        try:
+            response = client.generate_chat_completion_with_tools(
+                system_prompt=system_prompt,
+                messages=current_messages,
+                tools=BOOKING_TOOLS,
+                tool_choice="auto",
+                temperature=temperature,
+            )
+        except (AIAssistantException, Exception) as exc:
+            logger.error("AI assistant tool-enabled call failed: %s", exc)
+            return FALLBACK_ASSISTANT_REPLY
+
+        choice = response.choices[0]
+        msg = choice.message
+
+        # No tool calls → final text answer from the assistant.
+        if not getattr(msg, "tool_calls", None):
+            return (msg.content or "").strip()
+
+        # Assistant wants to call one or more tools.
+        assistant_content = msg.content or ""
+        tool_calls_entries: list[dict[str, Any]] = []
+        for tc in msg.tool_calls:
+            tool_calls_entries.append(
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments,
+                    },
+                }
+            )
+
+        current_messages.append(
+            {
+                "role": "assistant",
+                "content": assistant_content,
+                "tool_calls": tool_calls_entries,
+            }
+        )
+
+        # Execute each requested tool.
+        for tc in msg.tool_calls:
+            tool_name = tc.function.name
+            tool_impl = BOOKING_TOOL_IMPLS.get(tool_name)
+
+            if tool_impl is None:
+                tool_result: dict[str, Any] = {
+                    "ok": False,
+                    "error": f"unknown tool: {tool_name}",
+                }
+            else:
+                try:
+                    args = json.loads(tc.function.arguments or "{}")
+                except json.JSONDecodeError:
+                    tool_result = {"ok": False, "error": "invalid tool arguments"}
+                else:
+                    if tool_name == "get_available_slots":
+                        tool_result = tool_impl(
+                            session,
+                            project_id=args.get("project_id", str(conversation.project_id)),
+                        )
+                    elif tool_name == "book_site_visit":
+                        tool_result = tool_impl(
+                            session,
+                            actor=actor,
+                            slot_id=args.get("slot_id", ""),
+                            lead_id=args.get("lead_id", str(conversation.lead_id)),
+                        )
+                    else:
+                        tool_result = {"ok": False, "error": f"unknown tool: {tool_name}"}
+
+            current_messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": json.dumps(tool_result),
+                }
+            )
+
+    # Round limit exceeded without a final answer.
+    logger.warning("AI assistant tool loop exceeded %d rounds", max_tool_rounds)
+    return FALLBACK_ASSISTANT_REPLY
 
