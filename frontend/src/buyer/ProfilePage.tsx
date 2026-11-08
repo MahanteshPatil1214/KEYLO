@@ -1,7 +1,10 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  AlertCircle,
   Mail,
   Phone,
+  PhoneOff,
   ShieldCheck,
   Calendar,
   LogOut,
@@ -11,6 +14,7 @@ import {
 } from "lucide-react";
 import { useBuyerUser } from "./BuyerAuthGuard";
 import { clearSession } from "../auth/session";
+import { fetchBuyerConversations, optOutContact } from "./api";
 
 export function ProfilePage() {
   const { user } = useBuyerUser();
@@ -28,6 +32,55 @@ export function ProfilePage() {
     .slice(0, 2)
     .join("")
     .toUpperCase() || "B";
+
+  /* ─── DPDP opt-out state ─── */
+  const [leadIds, setLeadIds] = useState<string[]>([]);
+  const [optOutConfirming, setOptOutConfirming] = useState(false);
+  const [optOutReason, setOptOutReason] = useState("");
+  const [optOutLoading, setOptOutLoading] = useState(false);
+  const [optOutError, setOptOutError] = useState<string | null>(null);
+  const [optOutCompleted, setOptOutCompleted] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchBuyerConversations()
+      .then((response) => {
+        if (cancelled) return;
+        const ids = Array.from(
+          new Set(response.items.map((c) => c.lead_id)),
+        );
+        setLeadIds(ids);
+      })
+      .catch(() => {
+        // Conversations may be empty; opt-out still works if a lead exists.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleOptOut = async () => {
+    setOptOutError(null);
+    setOptOutLoading(true);
+    try {
+      await Promise.all(
+        leadIds.map((leadId) =>
+          optOutContact(leadId, optOutReason || null),
+        ),
+      );
+      setOptOutCompleted(true);
+      setOptOutConfirming(false);
+      setOptOutReason("");
+    } catch (error) {
+      setOptOutError(
+        error instanceof Error
+          ? error.message
+          : "Keylo could not withdraw contact consent. Please try again.",
+      );
+    } finally {
+      setOptOutLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -133,7 +186,64 @@ export function ProfilePage() {
           <p className="text-xs text-charcoal/70 leading-relaxed">
             Your personal contact details and conversation logs are encrypted in accordance with industry security standards and accessed only by authorized property consultants.
           </p>
-        </div>
+            {leadIds.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-charcoal/10">
+                <p className="mb-2 text-[0.62rem] font-semibold tracking-[0.14em] text-charcoal/60 uppercase">
+                  DPDP contact consent
+                </p>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`inline-flex items-center gap-1.5 text-[0.72rem] font-semibold ${optOutCompleted ? "text-forest" : "text-charcoal"}`}>
+                    <CheckCircle2
+                      aria-hidden="true"
+                      className="size-3.5"
+                    />
+                    {optOutCompleted ? "Contact consent withdrawn" : "Active"}
+                  </span>
+                </div>
+                {optOutCompleted ? (
+                  <p className="mt-1 text-[0.64rem] leading-4 text-charcoal/55">
+                    You will no longer receive calls, emails, WhatsApp
+                    messages, or visit reminders for your enquiries.
+                  </p>
+                ) : null}
+                {!optOutCompleted && (
+                  <button
+                    type="button"
+                    onClick={() => setOptOutConfirming(true)}
+                    disabled={optOutLoading}
+                    className="mt-3 inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-charcoal/15 bg-white px-4 text-[0.7rem] font-semibold text-charcoal transition-colors hover:border-charcoal/25 hover:text-charcoal disabled:opacity-50 disabled:cursor-not-allowed">
+                    {optOutLoading ? (
+                      <>
+                        <span
+                          aria-hidden="true"
+                          className="size-3.5 animate-spin rounded-full border-2 border-ivory/40 border-t-ivory motion-reduce:animate-none"
+                        />
+                        Updating
+                      </>
+                    ) : (
+                      <>
+                        <PhoneOff
+                          aria-hidden="true"
+                          className="size-3.5"
+                        />
+                        Opt out of contact
+                      </>
+                    )}
+                  </button>
+                )}
+                {optOutError && (
+                  <p className="mt-2 flex items-start gap-1.5 text-sm leading-5 text-clay">
+                    <AlertCircle
+                      aria-hidden="true"
+                      className="mt-0.5 size-3.5 shrink-0"
+                    />
+                    {optOutError}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
 
         <div className="rounded-2xl border border-charcoal/10 bg-white p-6 shadow-xs space-y-3">
           <div className="flex items-center gap-2">
@@ -167,6 +277,72 @@ export function ProfilePage() {
           <span>Sign out</span>
         </button>
       </div>
+
+      {optOutConfirming && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-charcoal/40 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-xl border border-charcoal/10 bg-white p-6 shadow-2xl">
+            <h3 className="font-display text-lg leading-tight text-charcoal">
+              Confirm opt-out
+            </h3>
+            <p className="mt-2 text-sm leading-6 text-charcoal/65">
+              Withdraw contact consent for{" "}
+              <span className="font-semibold text-charcoal">
+                {user.full_name}
+              </span>
+              ? You will no longer receive calls, emails, WhatsApp messages, or
+              visit reminders for your enquiries.
+            </p>
+            <div className="mt-4">
+              <label
+                htmlFor="buyer-optout-reason"
+                className="mb-1.5 block text-[0.6rem] font-semibold tracking-[0.14em] text-charcoal/60 uppercase">
+                Reason (optional)
+              </label>
+              <textarea
+                id="buyer-optout-reason"
+                value={optOutReason}
+                onChange={(event) => setOptOutReason(event.target.value)}
+                placeholder="e.g. No longer interested in this project"
+                maxLength={500}
+                disabled={optOutLoading}
+                className="min-h-[80px] w-full rounded-lg border border-charcoal/15 bg-white px-3 text-xs font-medium text-charcoal outline-none transition-colors focus:border-forest focus:ring-2 focus:ring-forest/15 disabled:opacity-60">
+              </textarea>
+            </div>
+            <div className="mt-5 flex items-end justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setOptOutConfirming(false)}
+                disabled={optOutLoading}
+                className="min-h-10 inline-flex items-center justify-center gap-1.5 rounded-lg border border-charcoal/15 bg-white px-4 text-[0.7rem] font-semibold text-charcoal transition-colors hover:border-charcoal/25 hover:text-charcoal disabled:opacity-50">
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleOptOut}
+                disabled={optOutLoading}
+                className="min-h-10 inline-flex items-center justify-center gap-1.5 rounded-lg border border-charcoal/15 bg-forest px-4 text-[0.7rem] font-semibold text-ivory transition-colors hover:bg-forest-deep disabled:opacity-50 disabled:cursor-not-allowed">
+                {optOutLoading ? (
+                  <>
+                    <span
+                      aria-hidden="true"
+                      className="size-3.5 animate-spin rounded-full border-2 border-ivory/40 border-t-ivory motion-reduce:animate-none"
+                    />
+                    Opting out
+                  </>
+                ) : (
+                  <>
+                    <PhoneOff
+                      aria-hidden="true"
+                      className="size-3.5"
+                    />
+                    Confirm opt-out
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

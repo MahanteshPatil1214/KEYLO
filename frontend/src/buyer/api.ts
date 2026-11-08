@@ -439,3 +439,13 @@ export function createBuyerConversation(payload: {
     body: JSON.stringify(payload),
   });
 }
+
+export function optOutContact(
+  leadId: string,
+  reason?: string | null,
+): Promise<void> {
+  return authenticatedRequest(`/leads/${leadId}/opt-out`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  }).then(() => undefined);
+}
