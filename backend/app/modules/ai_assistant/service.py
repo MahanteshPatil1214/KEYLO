@@ -186,7 +186,7 @@ def chat(
         )
         assistant_reply_text = UNCONFIGURED_ASSISTANT_REPLY
     elif use_tools:
-        assistant_reply_text = _run_tool_chat_loop(
+        assistant_reply_text, tools_used = _run_tool_chat_loop(
             session=session,
             client=client,
             actor=actor,
@@ -195,7 +195,6 @@ def chat(
             dialog_messages=dialog_messages,
             temperature=settings.assistant_temperature,
         )
-        tools_used = True
     else:
         try:
             assistant_reply_text = client.generate_chat_completion(
@@ -270,16 +269,15 @@ def _run_tool_chat_loop(
     dialog_messages: list[dict[str, str]],
     temperature: float,
     max_tool_rounds: int = 5,
-) -> str:
+) -> tuple[str, bool]:
     """Run a tool-enabled conversation loop with Groq.
 
-    Calls Groq with booking tools defined. When the assistant requests a tool
-    call, executes it (checking free slots or booking a visit), feeds the
-    result back, and continues until Groq returns a final text answer or the
-    round limit is reached.
+    Returns (reply_text, tools_used) where tools_used is True only if the
+    assistant actually invoked at least one booking tool.
     """
 
     current_messages: list[dict[str, Any]] = list(dialog_messages)
+    tools_used = False
 
     for _round in range(max_tool_rounds):
         try:
@@ -292,16 +290,17 @@ def _run_tool_chat_loop(
             )
         except (AIAssistantException, Exception) as exc:
             logger.error("AI assistant tool-enabled call failed: %s", exc)
-            return FALLBACK_ASSISTANT_REPLY
+            return FALLBACK_ASSISTANT_REPLY, False
 
         choice = response.choices[0]
         msg = choice.message
 
         # No tool calls → final text answer from the assistant.
         if not getattr(msg, "tool_calls", None):
-            return (msg.content or "").strip()
+            return (msg.content or "").strip(), tools_used
 
         # Assistant wants to call one or more tools.
+        tools_used = True
         assistant_content = msg.content or ""
         tool_calls_entries: list[dict[str, Any]] = []
         for tc in msg.tool_calls:
@@ -365,5 +364,5 @@ def _run_tool_chat_loop(
 
     # Round limit exceeded without a final answer.
     logger.warning("AI assistant tool loop exceeded %d rounds", max_tool_rounds)
-    return FALLBACK_ASSISTANT_REPLY
+    return FALLBACK_ASSISTANT_REPLY, tools_used
 

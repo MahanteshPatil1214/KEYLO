@@ -400,6 +400,36 @@ def test_ai_assistant_auto_flags_conversation_when_facts_unavailable(
         def generate_chat_completion(self, **kwargs: Any) -> str:
             return unavailable_reply
 
+        class _MockMessage:
+            def __init__(self, content: str, tool_calls: list | None = None):
+                self.content = content
+                self.tool_calls = tool_calls
+
+        def generate_chat_completion_with_tools(
+            self,
+            *,
+            system_prompt: str,
+            messages: list[dict[str, str]],
+            tools: list[dict[str, Any]],
+            tool_choice: str | dict[str, Any] = "auto",
+            temperature: float = 0.2,
+        ) -> Any:
+            return type(
+                "MockResponse",
+                (),
+                {
+                    "choices": [
+                        type(
+                            "MockChoice",
+                            (),
+                            {
+                                "message": self._MockMessage(unavailable_reply),
+                            },
+                        )()
+                    ]
+                },
+            )()
+
     mock_client = MockUnavailableGroq()
     app.dependency_overrides[get_assistant_client] = lambda: mock_client
     try:

@@ -84,6 +84,45 @@ class MockGroqClient(GroqClient):
             raise self.error
         return self.reply
 
+    class _MockMessage:
+        def __init__(self, content: str, tool_calls: list | None = None):
+            self.content = content
+            self.tool_calls = tool_calls
+
+    class _MockChoice:
+        def __init__(self, message: _MockMessage):
+            self.message = message
+
+    def generate_chat_completion_with_tools(
+        self,
+        *,
+        system_prompt: str,
+        messages: list[dict[str, str]],
+        tools: list[dict[str, Any]],
+        tool_choice: str | dict[str, Any] = "auto",
+        temperature: float = 0.2,
+    ) -> Any:
+        self.call_count += 1
+        self.last_system_prompt = system_prompt
+        self.last_messages = messages
+        if self.error is not None:
+            raise self.error
+        return type(
+            "MockResponse",
+            (),
+            {
+                "choices": [
+                    type(
+                        "MockChoice",
+                        (),
+                        {
+                            "message": self._MockMessage(self.reply),
+                        },
+                    )()
+                ]
+            },
+        )()
+
 
 @pytest.fixture()
 def mock_groq() -> MockGroqClient:
