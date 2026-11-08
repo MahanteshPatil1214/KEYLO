@@ -15,10 +15,10 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.12%20%7C%203.13-3776AB?logo=python&logoColor=white" alt="Python" />
   <img src="https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi&logoColor=white" alt="FastAPI" />
-  <img src="https://img.shields.io/badge/React-19.0-61DAFB?logo=react&logoColor=black" alt="React" />
-  <img src="https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
-  <img src="https://img.shields.io/badge/Vite-6.0-646CFF?logo=vite&logoColor=white" alt="Vite" />
-  <img src="https://img.shields.io/badge/TailwindCSS-3.4-06B6D4?logo=tailwindcss&logoColor=white" alt="Tailwind CSS" />
+  <img src="https://img.shields.io/badge/React-19.3-61DAFB?logo=react&logoColor=black" alt="React" />
+  <img src="https://img.shields.io/badge/TypeScript-7.x-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/Vite-8.x-646CFF?logo=vite&logoColor=white" alt="Vite" />
+  <img src="https://img.shields.io/badge/TailwindCSS-4.x-06B6D4?logo=tailwindcss&logoColor=white" alt="Tailwind CSS" />
   <img src="https://img.shields.io/badge/Tests-224%20Passed-brightgreen" alt="Tests" />
 </p>
 
@@ -62,7 +62,7 @@
 
 | Layer | Technology | Details |
 | :--- | :--- | :--- |
-| **Frontend** | React 19, TypeScript, Vite | Tailwind CSS, Lucide React, Headless UI, bespoke SVG charting |
+| **Frontend** | React 19.3, TypeScript 7.x, Vite 8.x | Tailwind CSS 4.x, Lucide React, bespoke SVG charting |
 | **Backend** | Python 3.12+, FastAPI | SQLAlchemy 2.0, Pydantic v2, Alembic, AnyIO, Uvicorn |
 | **Database** | SQLite (Dev) / PostgreSQL (Prod) | Normalized schema with foreign keys, checks, and partial indexes |
 | **AI / LLM** | Groq API (`openai/gpt-oss-120b`) | Deterministic fact-retrieval prompt engine and multi-turn dialogue |
@@ -108,13 +108,16 @@ KEYLO/
 │   ├── public/                 # Static assets and favicon
 │   ├── src/
 │   │   ├── components/         # Reusable UI components, layout, and charts
-│   │   ├── pages/              # Portal pages (Buyer, Sales, Admin)
-│   │   └── services/           # Axios HTTP API clients and typed schemas
+│   │   └── pages/              # Portal pages (Buyer, Sales, Admin)
 │   └── scripts/                # Automated Puppeteer verification suites
 └── docs/
     ├── assets/                 # Brand logo assets (SVG, PNG)
     └── screenshots/            # Application interface captures
 ```
+
+Frontend HTTP API clients live in per-module files rather than a shared `services/` folder:
+`frontend/src/sales/api.ts`, `frontend/src/buyer/api.ts`, `frontend/src/auth/api.ts`,
+`frontend/src/admin/api.ts`.
 
 ---
 
@@ -293,10 +296,10 @@ Configure `backend/.env` based on `backend/.env.example`:
 ## Running Tests
 
 ### 1. Backend Pytest Suite
-Runs all 224 unit, API, integration, and security tests:
+Runs all unit, API, integration, and security tests:
 ```bash
 cd backend
-python -m pytest backend/tests -v
+python -m pytest tests -v
 ```
 
 ### 2. Frontend Typecheck & Build
