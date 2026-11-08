@@ -5,10 +5,55 @@ import path from 'path';
 import os from 'os';
 
 const isWindows = os.platform() === 'win32';
+const ARTIFACTS_DIR = path.resolve('e2e-artifacts');
 const SCREENSHOTS_DIR = path.resolve('e2e-screenshots');
+const BACKEND_URL = 'http://127.0.0.1:8000';
+const FRONTEND_URL = 'http://127.0.0.1:5173';
+const HEALTH_READY_PATH = '/api/v1/health/ready';
+const PORT_POLL_TIMEOUT_MS = 60000;
 
-if (!fs.existsSync(SCREENSHOTS_DIR)) {
-  fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
+for (const dir of [ARTIFACTS_DIR, SCREENSHOTS_DIR]) {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+}
+
+/** Collect browser console messages so they can be attached to failure artifacts. */
+const consoleLogs = [];
+let currentPage = null;
+let currentBrowser = null;
+let suitePassed = false;
+
+function logConsole(message) {
+  const text = message.text();
+  const type = message.type();
+  const entry = `[${new Date().toISOString()}] [${type}] ${text}`;
+  consoleLogs.push(entry);
+  if (!text.includes('[vite]') && !text.includes('React DevTools')) {
+    console.log('[Browser Console]:', text);
+  }
+}
+
+function waitPort(port, pathName = '/', timeoutMs = PORT_POLL_TIMEOUT_MS) {
+  const start = Date.now();
+  return new Promise((resolve, reject) => {
+    const check = async () => {
+      try {
+        const res = await fetch(`http://127.0.0.1:${port}${pathName}`);
+        if (res.status < 500) {
+          return resolve();
+        }
+      } catch (e) {
+        // Retry
+      }
+      if (Date.now() - start > timeoutMs) {
+        reject(new Error(`Timeout waiting for http://127.0.0.1:${port}${pathName}`));
+      } else {
+        setTimeout(check, 400);
+      }
+    };
+    check();
+  });
 }
 
 function getPythonExecutable() {
@@ -42,28 +87,6 @@ function getChromeExecutablePath() {
   return undefined;
 }
 
-function waitPort(port, timeoutMs = 25000) {
-  const start = Date.now();
-  return new Promise((resolve, reject) => {
-    const check = async () => {
-      try {
-        const res = await fetch(`http://127.0.0.1:${port}/`);
-        if (res.status < 500) {
-          return resolve();
-        }
-      } catch (e) {
-        // Retry
-      }
-      if (Date.now() - start > timeoutMs) {
-        reject(new Error(`Timeout waiting for port ${port}`));
-      } else {
-        setTimeout(check, 400);
-      }
-    };
-    check();
-  });
-}
-
 async function run() {
   console.log('================================================================');
   console.log('=== KEYLO FULL END-TO-END QA & STABILIZATION VERIFICATION SUITE ===');
@@ -73,8 +96,24 @@ async function run() {
   console.log('\n--- 1. Building Production Frontend Assets ---');
   execSync(`${getNpmCommand()} --prefix frontend run build`, { stdio: 'inherit' });
 
-  // 2. Start FastAPI Backend
-  console.log('\n--- 2. Starting FastAPI Backend on port 8000 ---');
+  // 2. Apply database migrations and seed demo data so the backend can serve
+  // authenticated E2E flows against a populated database.
+  console.log('\n--- 2. Applying database migrations and seeding demo data ---');
+  execSync(`${getPythonExecutable()} -m alembic upgrade head`, {
+    cwd: path.resolve('backend'),
+    stdio: 'inherit',
+    env: { ...process.env, PYTHONUNBUFFERED: '1' },
+    shell: true,
+  });
+  execSync(`${getPythonExecutable()} scripts/prepare_demo_environment.py`, {
+    cwd: path.resolve('backend'),
+    stdio: 'inherit',
+    env: { ...process.env, PYTHONUNBUFFERED: '1' },
+    shell: true,
+  });
+
+  // 3. Start FastAPI Backend on port 8000
+  console.log('\n--- 3. Starting FastAPI Backend on port 8000 ---');
   const backendProc = spawn(
     getPythonExecutable(),
     ['-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', '8000'],
@@ -97,8 +136,8 @@ async function run() {
     if (s.includes('ERROR')) console.error('[Backend Err]', s.trim());
   });
 
-  // 3. Start Frontend Preview
-  console.log('\n--- 3. Starting Frontend Preview Server on port 5173 ---');
+  // 4. Start Frontend Preview
+  console.log('\n--- 4. Starting Frontend Preview Server on port 5173 ---');
   const frontendProc = spawn(
     getNpmCommand(),
     ['--prefix', 'frontend', 'run', 'preview', '--', '--host', '127.0.0.1', '--port', '5173'],
@@ -115,39 +154,53 @@ async function run() {
   let browser;
 
   try {
-    await waitPort(8000);
-    console.log('Backend is operational on port 8000.');
+    await waitPort(8000, HEALTH_READY_PATH);
+    console.log('Backend is operational on port 8000 (/api/v1/health/ready).');
     await waitPort(5173);
     console.log('Frontend is operational on port 5173.');
 
-    browser = await puppeteer.launch({
+    currentBrowser = await puppeteer.launch({
       headless: true,
       executablePath: getChromeExecutablePath(),
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu'],
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-gpu',
+        '--disable-dev-shm-usage',
+      ],
     });
 
-    const page = await browser.newPage();
-    page.on('console', msg => {
-      const text = msg.text();
-      if (!text.includes('[vite]') && !text.includes('React DevTools')) {
-        console.log('[Browser Console]:', text);
-      }
+    currentPage = await currentBrowser.newPage();
+    // Fail fast on slow pages/navigation instead of hanging indefinitely.
+    currentPage.setDefaultNavigationTimeout(30000);
+    currentPage.setDefaultTimeout(10000);
+    currentPage.on('console', msg => logConsole(msg));
+    currentPage.on('pageerror', err => {
+      console.error('[Browser Page Error]:', err.message);
+      consoleLogs.push(`[${new Date().toISOString()}] [pageerror] ${err.message}`);
+    });
+
+    await currentPage.tracing.start({
+      screenshots: true,
+      snapshots: true,
+      categories: ['devtools.timeline'],
     });
 
     // -------------------------------------------------------------
     // TEST 1: Public Homepage & Navigation
     // -------------------------------------------------------------
     console.log('\n--- TEST 1: Verifying Public Homepage (1440x900) ---');
-    await page.setViewport({ width: 1440, height: 900 });
-    await page.goto('http://127.0.0.1:5173/', { waitUntil: 'networkidle0' });
-    const heroTitle = await page.$eval('h1', el => el.textContent);
+    await currentPage.setViewport({ width: 1440, height: 900 });
+    await currentPage.goto(`${FRONTEND_URL}/`, { waitUntil: 'networkidle0' });
+    await currentPage.waitForSelector('h1', { timeout: 10000 });
+    const heroTitle = await currentPage.$eval('h1', el => el.textContent);
     console.log('[PASS] Homepage loaded with heading:', heroTitle.trim());
 
     // -------------------------------------------------------------
     // TEST 2: Buyer Registration & Login
     // -------------------------------------------------------------
     console.log('\n--- TEST 2: Buyer Authentication Flow ---');
-    await page.goto('http://127.0.0.1:5173/login', { waitUntil: 'networkidle0' });
+    await currentPage.goto(`${FRONTEND_URL}/login`, { waitUntil: 'networkidle0' });
 
     const buyerEmail = process.env.KEYLO_BUYER_EMAIL;
     const buyerPassword = process.env.KEYLO_BUYER_PASSWORD;
@@ -155,15 +208,15 @@ async function run() {
       throw new Error('Missing required env vars: KEYLO_BUYER_EMAIL, KEYLO_BUYER_PASSWORD');
     }
 
-    await page.type('input[type="email"], input[name="email"]', buyerEmail);
-    await page.type('input[type="password"], input[name="password"]', buyerPassword);
-    await page.click('button[type="submit"]');
+    await currentPage.type('input[type="email"], input[name="email"]', buyerEmail);
+    await currentPage.type('input[type="password"], input[name="password"]', buyerPassword);
+    await currentPage.click('button[type="submit"]');
 
-    await page.waitForFunction(() => window.location.pathname.startsWith('/buyer'), { timeout: 10000 });
-    console.log('[PASS] Buyer logged in successfully! URL:', page.url());
+    await currentPage.waitForFunction(() => window.location.pathname.startsWith('/buyer'), { timeout: 10000 });
+    console.log('[PASS] Buyer logged in successfully! URL:', currentPage.url());
 
     await new Promise(r => setTimeout(r, 1500));
-    await page.screenshot({
+    await currentPage.screenshot({
       path: path.join(SCREENSHOTS_DIR, 'e2e-buyer-dashboard.png'),
       fullPage: false,
     });
@@ -173,29 +226,29 @@ async function run() {
     // TEST 3: Buyer AI Conversation & Multilingual Chat
     // -------------------------------------------------------------
     console.log('\n--- TEST 3: Buyer AI Conversations & Fact-Grounded Chat ---');
-    await page.goto('http://127.0.0.1:5173/buyer/conversations', { waitUntil: 'networkidle0' });
+    await currentPage.goto(`${FRONTEND_URL}/buyer/conversations`, { waitUntil: 'networkidle0' });
     await new Promise(r => setTimeout(r, 1500));
 
     // Check if chat input exists
-    const chatInput = await page.$('input[placeholder*="message"], textarea[placeholder*="message"], input[type="text"]');
+    const chatInput = await currentPage.$('input[placeholder*="message"], textarea[placeholder*="message"], input[type="text"]');
     if (chatInput) {
       // Send multilingual test message
       console.log('Testing chat message delivery...');
       await chatInput.type('Hello! What configurations and amenities are available at the project?');
-      const sendBtn = await page.$('button[type="submit"], button[aria-label="Send message"]');
+      const sendBtn = await currentPage.$('button[type="submit"], button[aria-label="Send message"]');
       if (sendBtn) {
         await sendBtn.click();
         await new Promise(r => setTimeout(r, 1500));
       }
     }
-    await page.screenshot({
+    await currentPage.screenshot({
       path: path.join(SCREENSHOTS_DIR, 'e2e-buyer-ai-chat-multilingual.png'),
       fullPage: false,
     });
     console.log('Saved screenshot: e2e-buyer-ai-chat-multilingual.png');
 
     // Sign out from Buyer session
-    await page.evaluate(() => {
+    await currentPage.evaluate(() => {
       localStorage.clear();
       sessionStorage.clear();
     });
@@ -204,7 +257,7 @@ async function run() {
     // TEST 4: Sales Executive Workspace
     // -------------------------------------------------------------
     console.log('\n--- TEST 4: Sales Executive Workspace Flow ---');
-    await page.goto('http://127.0.0.1:5173/login', { waitUntil: 'networkidle0' });
+    await currentPage.goto(`${FRONTEND_URL}/login`, { waitUntil: 'networkidle0' });
 
     const salesEmail = process.env.KEYLO_SALES_EMAIL;
     const salesPassword = process.env.KEYLO_SALES_PASSWORD;
@@ -212,25 +265,25 @@ async function run() {
       throw new Error('Missing required env vars: KEYLO_SALES_EMAIL, KEYLO_SALES_PASSWORD');
     }
 
-    await page.type('input[type="email"], input[name="email"]', salesEmail);
-    await page.type('input[type="password"], input[name="password"]', salesPassword);
-    await page.click('button[type="submit"]');
+    await currentPage.type('input[type="email"], input[name="email"]', salesEmail);
+    await currentPage.type('input[type="password"], input[name="password"]', salesPassword);
+    await currentPage.click('button[type="submit"]');
 
-    await page.waitForFunction(() => window.location.pathname.startsWith('/sales'), { timeout: 10000 });
-    console.log('[PASS] Sales Executive logged in successfully! URL:', page.url());
+    await currentPage.waitForFunction(() => window.location.pathname.startsWith('/sales'), { timeout: 10000 });
+    console.log('[PASS] Sales Executive logged in successfully! URL:', currentPage.url());
     await new Promise(r => setTimeout(r, 1500));
 
-    await page.screenshot({
+    await currentPage.screenshot({
       path: path.join(SCREENSHOTS_DIR, 'e2e-sales-workspace.png'),
       fullPage: false,
     });
     console.log('Saved screenshot: e2e-sales-workspace.png');
 
     // Verify Sales Navigation items
-    const salesLeadsLink = await page.$('a[href="/sales/leads"]');
-    const salesConversationsLink = await page.$('a[href="/sales/conversations"]');
-    const salesVisitsLink = await page.$('a[href="/sales/visits"]');
-    const salesFollowUpsLink = await page.$('a[href="/sales/follow-ups"]');
+    const salesLeadsLink = await currentPage.$('a[href="/sales/leads"]');
+    const salesConversationsLink = await currentPage.$('a[href="/sales/conversations"]');
+    const salesVisitsLink = await currentPage.$('a[href="/sales/visits"]');
+    const salesFollowUpsLink = await currentPage.$('a[href="/sales/follow-ups"]');
 
     console.log('[PASS] Sales Leads link exists:', !!salesLeadsLink);
     console.log('[PASS] Sales Conversations link exists:', !!salesConversationsLink);
@@ -238,7 +291,7 @@ async function run() {
     console.log('[PASS] Sales Follow-ups link exists:', !!salesFollowUpsLink);
 
     // Sign out from Sales session
-    await page.evaluate(() => {
+    await currentPage.evaluate(() => {
       localStorage.clear();
       sessionStorage.clear();
     });
@@ -247,7 +300,7 @@ async function run() {
     // TEST 5: Admin Console Navigation & Modules
     // -------------------------------------------------------------
     console.log('\n--- TEST 5: Admin Console Comprehensive Flow ---');
-    await page.goto('http://127.0.0.1:5173/login', { waitUntil: 'networkidle0' });
+    await currentPage.goto(`${FRONTEND_URL}/login`, { waitUntil: 'networkidle0' });
 
     const adminEmail = process.env.KEYLO_ADMIN_EMAIL;
     const adminPassword = process.env.KEYLO_ADMIN_PASSWORD;
@@ -255,16 +308,16 @@ async function run() {
       throw new Error('Missing required env vars: KEYLO_ADMIN_EMAIL, KEYLO_ADMIN_PASSWORD');
     }
 
-    await page.type('input[type="email"], input[name="email"]', adminEmail);
-    await page.type('input[type="password"], input[name="password"]', adminPassword);
-    await page.click('button[type="submit"]');
+    await currentPage.type('input[type="email"], input[name="email"]', adminEmail);
+    await currentPage.type('input[type="password"], input[name="password"]', adminPassword);
+    await currentPage.click('button[type="submit"]');
 
-    await page.waitForFunction(() => window.location.pathname.startsWith('/admin'), { timeout: 10000 });
-    console.log('[PASS] Administrator logged in successfully! URL:', page.url());
+    await currentPage.waitForFunction(() => window.location.pathname.startsWith('/admin'), { timeout: 10000 });
+    console.log('[PASS] Administrator logged in successfully! URL:', currentPage.url());
     await new Promise(r => setTimeout(r, 2000));
 
     // Module 1: Overview
-    await page.screenshot({
+    await currentPage.screenshot({
       path: path.join(SCREENSHOTS_DIR, 'e2e-admin-overview.png'),
       fullPage: false,
     });
@@ -272,9 +325,9 @@ async function run() {
 
     // Module 2: Projects & Fact Sheets
     console.log('\n--- Verifying Admin Projects & Fact Sheets ---');
-    await page.goto('http://127.0.0.1:5173/admin/projects', { waitUntil: 'networkidle0' });
+    await currentPage.goto(`${FRONTEND_URL}/admin/projects`, { waitUntil: 'networkidle0' });
     await new Promise(r => setTimeout(r, 1500));
-    await page.screenshot({
+    await currentPage.screenshot({
       path: path.join(SCREENSHOTS_DIR, 'e2e-admin-projects.png'),
       fullPage: false,
     });
@@ -282,9 +335,9 @@ async function run() {
 
     // Module 3: Site Visits & Slots Management
     console.log('\n--- Verifying Admin Site Visits & Slots ---');
-    await page.goto('http://127.0.0.1:5173/admin/visits', { waitUntil: 'networkidle0' });
+    await currentPage.goto(`${FRONTEND_URL}/admin/visits`, { waitUntil: 'networkidle0' });
     await new Promise(r => setTimeout(r, 1500));
-    await page.screenshot({
+    await currentPage.screenshot({
       path: path.join(SCREENSHOTS_DIR, 'e2e-admin-visits.png'),
       fullPage: false,
     });
@@ -292,9 +345,9 @@ async function run() {
 
     // Module 4: Analytics & Reporting Dashboard
     console.log('\n--- Verifying Admin Analytics & Trends Chart ---');
-    await page.goto('http://127.0.0.1:5173/admin/analytics', { waitUntil: 'networkidle0' });
+    await currentPage.goto(`${FRONTEND_URL}/admin/analytics`, { waitUntil: 'networkidle0' });
     await new Promise(r => setTimeout(r, 1500));
-    await page.screenshot({
+    await currentPage.screenshot({
       path: path.join(SCREENSHOTS_DIR, 'e2e-admin-analytics.png'),
       fullPage: false,
     });
@@ -302,9 +355,9 @@ async function run() {
 
     // Module 5: Settings & Notifications
     console.log('\n--- Verifying Admin System Settings ---');
-    await page.goto('http://127.0.0.1:5173/admin/settings', { waitUntil: 'networkidle0' });
+    await currentPage.goto(`${FRONTEND_URL}/admin/settings`, { waitUntil: 'networkidle0' });
     await new Promise(r => setTimeout(r, 1500));
-    await page.screenshot({
+    await currentPage.screenshot({
       path: path.join(SCREENSHOTS_DIR, 'e2e-admin-settings.png'),
       fullPage: false,
     });
@@ -312,9 +365,9 @@ async function run() {
 
     // Module 6: Audit Trail
     console.log('\n--- Verifying Admin Audit Trail ---');
-    await page.goto('http://127.0.0.1:5173/admin/audit-logs', { waitUntil: 'networkidle0' });
+    await currentPage.goto(`${FRONTEND_URL}/admin/audit-logs`, { waitUntil: 'networkidle0' });
     await new Promise(r => setTimeout(r, 1500));
-    await page.screenshot({
+    await currentPage.screenshot({
       path: path.join(SCREENSHOTS_DIR, 'e2e-admin-audit-logs.png'),
       fullPage: false,
     });
@@ -326,26 +379,26 @@ async function run() {
     console.log('\n--- TEST 6: Responsive Layouts (Tablet & Mobile) ---');
 
     // Tablet: 768px portrait
-    await page.setViewport({ width: 768, height: 1024, isMobile: true, hasTouch: true });
-    await page.goto('http://127.0.0.1:5173/admin', { waitUntil: 'networkidle0' });
+    await currentPage.setViewport({ width: 768, height: 1024, isMobile: true, hasTouch: true });
+    await currentPage.goto(`${FRONTEND_URL}/admin`, { waitUntil: 'networkidle0' });
     await new Promise(r => setTimeout(r, 1200));
-    await page.screenshot({
+    await currentPage.screenshot({
       path: path.join(SCREENSHOTS_DIR, 'e2e-responsive-tablet.png'),
       fullPage: false,
     });
     console.log('Saved screenshot: e2e-responsive-tablet.png');
 
     // Mobile: 390px iPhone width
-    await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
-    await page.goto('http://127.0.0.1:5173/admin', { waitUntil: 'networkidle0' });
+    await currentPage.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
+    await currentPage.goto(`${FRONTEND_URL}/admin`, { waitUntil: 'networkidle0' });
     await new Promise(r => setTimeout(r, 1200));
 
     // Open mobile slide-out drawer
-    const hamburger = await page.waitForSelector('button[aria-label="Open navigation menu"]', { timeout: 8000 });
+    const hamburger = await currentPage.waitForSelector('button[aria-label="Open navigation menu"]', { timeout: 8000 });
     await hamburger.click();
     await new Promise(r => setTimeout(r, 800));
 
-    await page.screenshot({
+    await currentPage.screenshot({
       path: path.join(SCREENSHOTS_DIR, 'e2e-responsive-mobile-drawer.png'),
       fullPage: false,
     });
@@ -354,17 +407,72 @@ async function run() {
     console.log('\n================================================================');
     console.log('=== ALL END-TO-END QA & STABILIZATION CHECKS PASSED CLEANLY! ===');
     console.log('================================================================');
-
-    await browser.close();
+    suitePassed = true;
   } finally {
     console.log('\nCleaning up processes...');
+
+    // --- Failure artifacts: capture evidence before tearing down the browser ---
+    if (currentBrowser) {
+      try {
+        if (currentPage && !suitePassed) {
+          await currentPage.screenshot({
+            path: path.join(
+              SCREENSHOTS_DIR,
+              `e2e-failure-${Date.now()}.png`,
+            ),
+            fullPage: true,
+          });
+          console.log('Saved failure screenshot: e2e-failure-<timestamp>.png');
+        }
+        await currentPage.tracing.stop({
+          path: path.join(ARTIFACTS_DIR, 'e2e-trace.zip'),
+        });
+        console.log('Saved trace: e2e-trace.zip');
+      } catch (artifactErr) {
+        console.error('Could not capture failure artifacts:', artifactErr.message);
+      }
+      try {
+        await currentBrowser.close();
+      } catch (closeErr) {
+        console.error('Error closing browser:', closeErr.message);
+      }
+    }
+
+    // Persist browser console logs for inspection of failed runs.
+    fs.writeFileSync(
+      path.join(ARTIFACTS_DIR, 'e2e-console.log'),
+      consoleLogs.join('\n') + '\n',
+      { encoding: 'utf-8' },
+    );
+
     frontendProc.kill();
     backendProc.kill();
   }
 }
 
-run().catch(err => {
+run().catch(async err => {
   console.error('Fatal E2E Test Failure:', err);
+  // Best-effort evidence capture when the suite dies before reaching `finally`.
+  try {
+    if (currentPage) {
+      await currentPage.screenshot({
+        path: path.join(SCREENSHOTS_DIR, `e2e-fatal-${Date.now()}.png`),
+        fullPage: true,
+      });
+    }
+    if (currentPage && currentBrowser) {
+      await currentPage.tracing.stop({
+        path: path.join(ARTIFACTS_DIR, 'e2e-trace.zip'),
+      });
+    }
+  } catch {
+    // Ignore: artifact capture is best-effort on a fatal failure.
+  }
+  fs.writeFileSync(
+    path.join(ARTIFACTS_DIR, 'e2e-console.log'),
+    consoleLogs.join('\n') + '\n',
+    { encoding: 'utf-8' },
+  );
   process.exit(1);
 });
 

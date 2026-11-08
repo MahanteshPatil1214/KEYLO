@@ -40,3 +40,4 @@ frontend/dist/
 
 # E2E verification screenshots
 e2e-screenshots/
+e2e-artifacts/

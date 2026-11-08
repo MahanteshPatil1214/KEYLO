@@ -122,6 +122,21 @@ jobs:
     needs: [backend-tests, frontend-build]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     timeout-minutes: 30
+    services:
+      # Postgres is required so the FastAPI backend can boot (DATABASE_URL and
+      # JWT_SECRET_KEY are required settings) and so E2E flows hit a real DB.
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: keylo_e2e
+          POSTGRES_USER: keylo_e2e
+          POSTGRES_PASSWORD: e2e-password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U keylo_e2e -d keylo_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - name: Checkout repository
@@ -155,6 +170,7 @@ jobs:
           npm run build
 
       - name: Install Chrome for Puppeteer
+        id: chrome
         uses: browser-actions/setup-chrome@latest
         with:
           chrome-version: stable
@@ -168,14 +184,32 @@ jobs:
           KEYLO_SALES_PASSWORD: ${{ secrets.KEYLO_SALES_PASSWORD }}
           KEYLO_ADMIN_EMAIL: ${{ secrets.KEYLO_ADMIN_EMAIL }}
           KEYLO_ADMIN_PASSWORD: ${{ secrets.KEYLO_ADMIN_PASSWORD }}
+          # Backend boot configuration (required by backend/app/core/config.py).
+          DATABASE_URL: postgresql+psycopg2://keylo_e2e:e2e-password@localhost:5432/keylo_e2e
+          JWT_SECRET_KEY: e2e-jwt-secret-key-for-ci-only-do-not-use-in-production
+          GROQ_API_KEY: dummy-groq-key-for-ci
+          ENVIRONMENT: testing
+          # Point Puppeteer at the Chrome installed by setup-chrome above.
+          PUPPETEER_EXECUTABLE_PATH: ${{ steps.chrome.outputs.chrome-path }}
         run: node frontend/scripts/verify-full-e2e-suite.mjs
+
+      - name: Upload E2E failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-artifacts-${{ run.attempt }}
+          path: |
+            e2e-screenshots/*.png
+            e2e-console.log
+            e2e-trace.zip
+          retention-days: 30
 
   # -------------------------------------------------------------------------
   # Deployment placeholder (extend when a production target is defined)
   # -------------------------------------------------------------------------
   deploy:
     runs-on: ubuntu-latest
-    needs: [backend-tests, frontend-build]
+    needs: [backend-tests, frontend-build, docker-build, e2e-browser-verification]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment: production
     steps:
