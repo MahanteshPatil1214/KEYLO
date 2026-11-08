@@ -232,6 +232,25 @@ docker compose down          # Stop and remove containers
 docker compose down -v       # Also remove database volume (destroys all data)
 ```
 
+**Seed demo data**
+
+The stack starts with an empty database. To populate it with the realistic
+1-month Ahmedabad demo environment (45 buyers, 3 projects, 125 leads, visits,
+follow-ups, marketing spend):
+
+```bash
+# Seed demo data (idempotent — safe to re-run)
+docker compose --profile seed up seed
+
+# Reset and re-seed from scratch
+docker compose --profile seed up seed  # script has built-in --reset handling
+# or reset first:
+docker compose exec backend python scripts/prepare_demo_environment.py --reset
+```
+
+The seed script is idempotent — running it repeatedly won't duplicate or
+corrupt data. It also preserves real user accounts.
+
 **Rebuild after code changes**
 
 ```bash

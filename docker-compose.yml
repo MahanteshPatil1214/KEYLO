@@ -85,6 +85,31 @@ services:
       - /app/node_modules
       - keylo_frontend_cache:/app/.vite
 
+  # ------------------------------------------------------------
+  # Seed: one-off demo data (opt-in via --profile seed)
+  # ------------------------------------------------------------
+  seed:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: keylo-seed
+    profiles: ["seed"]
+    depends_on:
+      backend:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql+psycopg2://keylo:change-me-local-dev@db:5432/keylo_db
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-use-a-random-64-character-secret-key-for-jwt-signing}
+      JWT_ALGORITHM: HS256
+      JWT_ISSUER: keylo-api
+      JWT_AUDIENCE: keylo-clients
+      ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: openai/gpt-oss-120b
+    volumes:
+      - ./backend:/app:ro
+    command: ["python", "scripts/prepare_demo_environment.py"]
+
 volumes:
   keylo_postgres_data:
   keylo_frontend_cache:
