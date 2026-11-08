@@ -188,9 +188,9 @@ def seed_demo_environment() -> dict[str, int]:
 
     Base.metadata.create_all(bind=engine)
 
-    admin_pw = os.getenv("KEYLO_ADMIN_PASSWORD", "Admin@123")
-    sales_pw = os.getenv("KEYLO_SALES_PASSWORD", "Sales@123")
-    buyer_pw = os.getenv("KEYLO_BUYER_PASSWORD", "Buyer@123")
+    admin_pw = os.getenv("KEYLO_ADMIN_PASSWORD", "Admin@123456")
+    sales_pw = os.getenv("KEYLO_SALES_PASSWORD", "Sales@123456")
+    buyer_pw = os.getenv("KEYLO_BUYER_PASSWORD", "Buyer@123456")
 
     with SessionLocal() as session:
         seed_roles(session)
@@ -213,6 +213,9 @@ def seed_demo_environment() -> dict[str, int]:
             )
             print("  Created Admin: admin.demo@keylo.com")
         else:
+            admin_user.password_hash = hash_password(admin_pw)
+            session.add(admin_user)
+            session.commit()
             print("  Verified Admin: admin.demo@keylo.com")
 
         # Sales executives
@@ -236,6 +239,9 @@ def seed_demo_environment() -> dict[str, int]:
                 )
                 print(f"  Created Sales Exec: {email} ({name})")
             else:
+                exec_user.password_hash = hash_password(sales_pw)
+                session.add(exec_user)
+                session.commit()
                 print(f"  Verified Sales Exec: {email} ({name})")
             executives.append(exec_user)
 
@@ -253,6 +259,9 @@ def seed_demo_environment() -> dict[str, int]:
             )
             print("  Created Buyer: buyer.demo@keylo.com (Sneha Reddy)")
         else:
+            primary_buyer.password_hash = hash_password(buyer_pw)
+            session.add(primary_buyer)
+            session.commit()
             print("  Verified Buyer: buyer.demo@keylo.com (Sneha Reddy)")
 
         # -------------------------------------------------------------
