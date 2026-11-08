@@ -15,6 +15,7 @@ import { Hero } from "./components/Hero";
 import { Navigation } from "./components/Navigation";
 import { ProductShowcase } from "./components/ProductShowcase";
 import { Workflow } from "./components/Workflow";
+import { DpdPPage } from "./pages/DpdPPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { RegisterPage } from "./pages/RegisterPage";
@@ -98,6 +99,7 @@ export default function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/privacy" element={<DpdPPage />} />
           <Route path="/admin" element={<AdminAuthGuard />}>
             <Route element={<AdminLayout />}>
               <Route index element={<AdminOverviewPage />} />

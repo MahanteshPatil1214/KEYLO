@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from threading import Lock
 from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from app.modules.leads import repository
 from app.modules.leads.exceptions import (

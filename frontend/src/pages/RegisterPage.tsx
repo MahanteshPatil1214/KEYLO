@@ -37,6 +37,11 @@ const registerSchema = z
       .regex(/\d/, "Include a number.")
       .regex(/[^A-Za-z0-9]/, "Include a symbol."),
     confirmPassword: z.string().min(1, "Confirm your password."),
+    privacyConsent: z
+      .boolean()
+      .refine((v) => v === true, {
+        message: "You must agree to the privacy policy to continue.",
+      }),
   })
   .refine((values) => values.password === values.confirmPassword, {
     path: ["confirmPassword"],
@@ -78,6 +83,7 @@ export function RegisterPage() {
       phone: "",
       password: "",
       confirmPassword: "",
+      privacyConsent: false,
     },
     mode: "onTouched",
   });
@@ -440,6 +446,39 @@ export function RegisterPage() {
                 className="mt-0.5 size-3.5 shrink-0"
               />
               {errors.confirmPassword.message}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="mt-5">
+          <label className="flex items-start gap-2.5 cursor-pointer text-sm leading-6 text-charcoal/70">
+            <input
+              id="privacy-consent"
+              type="checkbox"
+              className="mt-1 size-4 cursor-pointer rounded border-charcoal/30 accent-forest shrink-0"
+              {...register("privacyConsent")}
+            />
+            <span>
+              I agree to the{" "}
+              <Link
+                to="/privacy"
+                className="font-semibold text-forest underline-offset-4 transition-colors duration-200 hover:text-forest-deep hover:underline"
+              >
+                Privacy Policy
+              </Link>
+              {" and how Keylo handles my personal data."}
+            </span>
+          </label>
+          {errors.privacyConsent ? (
+            <p
+              id="privacy-consent-error"
+              className="mt-2 flex items-start gap-1.5 text-sm leading-5 text-clay"
+            >
+              <AlertCircle
+                aria-hidden="true"
+                className="mt-0.5 size-3.5 shrink-0"
+              />
+              {errors.privacyConsent.message}
             </p>
           ) : null}
         </div>

@@ -2,6 +2,7 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  AlertCircle,
   Eye,
   Mail,
   MessageSquare,
@@ -175,6 +176,17 @@ export function LeadTable({
                           ? ` · ${lead.preferred_configuration}`
                           : ""}
                       </span>
+                      {lead.opted_out && (
+                        <span
+                          className="mt-0.5 inline-flex items-center gap-1 rounded-full border border-clay/25 bg-clay-soft px-2 py-0.5 text-[0.6rem] font-semibold text-clay"
+                          title="DPDP opt-out: contact consent withdrawn">
+                          <AlertCircle
+                            aria-hidden="true"
+                            className="size-2.5 shrink-0"
+                          />
+                          Opted out
+                        </span>
+                      )}
                     </div>
                   </div>
                 </td>

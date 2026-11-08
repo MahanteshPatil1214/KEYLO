@@ -108,6 +108,12 @@ export function Footer() {
               Back to top
               <ArrowUp aria-hidden="true" className="size-3" />
             </a>
+            <Link
+              to="/privacy"
+              className="inline-flex min-h-8 items-center transition-colors hover:text-ivory"
+            >
+              Privacy policy
+            </Link>
           </div>
         </div>
       </div>

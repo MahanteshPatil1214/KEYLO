@@ -50,6 +50,9 @@ export type SalesLead = {
   budget_max: number | null;
   preferred_configuration: string | null;
   consent_to_contact: boolean;
+  opted_out: boolean;
+  opted_out_at: string | null;
+  opted_out_reason: string | null;
   assigned_executive_id: string | null;
   assigned_at: string | null;
   created_at: string;
@@ -453,6 +456,16 @@ export function updateLeadStatus(
   return authenticatedRequest<SalesLead>(`/leads/${leadId}/status`, {
     method: "PATCH",
     body: JSON.stringify({ status }),
+  });
+}
+
+export function optOutLead(
+  leadId: string,
+  reason?: string | null,
+): Promise<SalesLead> {
+  return authenticatedRequest<SalesLead>(`/leads/${leadId}/opt-out`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
   });
 }
 

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
+  AlertCircle,
   AlertTriangle,
   ArrowDown,
   CalendarCheck,
@@ -12,6 +13,7 @@ import {
   MapPin,
   MessageSquare,
   Phone,
+  PhoneOff,
   UserRound,
   Wallet,
   X,
@@ -20,6 +22,7 @@ import { useSalesUser } from "../SalesAuthGuard";
 import {
   fetchLeadDetail,
   fetchLeadEnquiryHistory,
+  optOutLead,
   updateLeadStatus,
   type LeadEnquiryHistory,
   type LeadStatus,
@@ -479,6 +482,39 @@ export function LeadDetailDrawer({
     },
   });
 
+  const [confirmingOptOut, setConfirmingOptOut] = useState(false);
+  const [optOutReason, setOptOutReason] = useState("");
+
+  const optOutMutation = useMutation({
+    mutationFn: () =>
+      optOutLead(leadId as string, optOutReason || null),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(
+        ["sales", "leads", leadId, "detail"],
+        updated,
+      );
+      queryClient.invalidateQueries({ queryKey: ["sales", "leads"] });
+      queryClient.invalidateQueries({ queryKey: ["sales", "dashboard"] });
+      setConfirmingOptOut(false);
+      setOptOutReason("");
+      setNextStatus("");
+      setFeedback({
+        tone: "success",
+        message:
+          "Contact consent withdrawn. This buyer will no longer be contacted.",
+      });
+    },
+    onError: (error) => {
+      setFeedback({
+        tone: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Keylo could not withdraw contact consent for this lead.",
+      });
+    },
+  });
+
   useEffect(() => {
     setNextStatus("");
     setFeedback(null);
@@ -778,6 +814,35 @@ export function LeadDetailDrawer({
                             : "Not consented"}
                         </span>
                       </DetailItem>
+                      {detail.opted_out ? (
+                        <DetailItem label="DPDP opt-out">
+                          <span
+                            className="inline-flex items-center gap-1.5 text-[0.72rem] font-semibold text-clay">
+                            <AlertCircle
+                              aria-hidden="true"
+                              className="size-3.5"
+                            />
+                            Opted out
+                          </span>
+                          <p className="mt-0.5 text-[0.64rem] leading-4 text-charcoal/55">
+                            Contact consent withdrawn{" "}
+                            {detail.opted_out_at ? (
+                              <>
+                                on{" "}
+                                <time dateTime={detail.opted_out_at}>
+                                  {formatDateTime(detail.opted_out_at)}
+                                </time>
+                              </>
+                            ) : null}
+                            {detail.opted_out_reason ? (
+                              <>
+                                . Reason: {detail.opted_out_reason}
+                              </>
+                            ) : null}
+                            .
+                          </p>
+                        </DetailItem>
+                      ) : null}
                       <DetailItem label="Preferred configuration">
                         {detail.preferred_configuration || (
                           <span className="text-charcoal/50">
@@ -963,6 +1028,86 @@ export function LeadDetailDrawer({
                     )}
                   </section>
 
+                  <section
+                    aria-labelledby="drawer-optout-heading"
+                    className="rounded-xl border border-charcoal/10 bg-white p-3.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[0.58rem] font-semibold tracking-[0.16em] text-charcoal uppercase">
+                          DPDP opt-out
+                        </p>
+                        <h3
+                          id="drawer-optout-heading"
+                          className="mt-0.5 font-display text-lg leading-tight text-charcoal">
+                          Withdraw contact consent
+                        </h3>
+                      </div>
+                    </div>
+                    <p className="mt-2 text-[0.7rem] leading-5 text-charcoal/70">
+                      Record that this buyer has withdrawn consent to be
+                      contacted. No further calls, emails, WhatsApp messages,
+                      visit reminders or follow-ups will be initiated for this
+                      lead.
+                    </p>
+                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                      <div>
+                        <label
+                          htmlFor="lead-optout-reason"
+                          className="mb-1.5 block text-[0.6rem] font-semibold tracking-[0.14em] text-charcoal/60 uppercase">
+                          Reason (optional)
+                        </label>
+                        <textarea
+                          id="lead-optout-reason"
+                          value={optOutReason}
+                          onChange={(event) =>
+                            setOptOutReason(event.target.value)}
+                          placeholder="e.g. No longer interested in this project"
+                          maxLength={500}
+                          disabled={
+                            optOutMutation.isPending || confirmingOptOut
+                          }
+                          className="min-h-[80px] w-full rounded-lg border border-charcoal/15 bg-white px-3 text-xs font-medium text-charcoal outline-none transition-colors focus:border-forest focus:ring-2 focus:ring-forest/15 disabled:opacity-60">
+                        </textarea>
+                      </div>
+                      <div className="flex items-end">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFeedback(null);
+                            setConfirmingOptOut(true);
+                          }}
+                          disabled={
+                            detail.consent_to_contact === false ||
+                            optOutMutation.isPending
+                          }
+                          className="inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-lg border border-charcoal/15 bg-white px-4 text-[0.7rem] font-semibold text-charcoal transition-colors hover:border-charcoal/25 hover:text-charcoal disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">
+                          {optOutMutation.isPending ? (
+                            <>
+                              <span
+                                aria-hidden="true"
+                                className="size-3.5 animate-spin rounded-full border-2 border-ivory/40 border-t-ivory motion-reduce:animate-none"
+                              />
+                              Updating
+                            </>
+                          ) : (
+                            <>
+                              <PhoneOff
+                                aria-hidden="true"
+                                className="size-3.5"
+                              />
+                              Opt out
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                    <p className="mt-2 text-[0.64rem] leading-4 text-charcoal/55">
+                      {detail.consent_to_contact === false
+                        ? "This lead has not consented to contact."
+                        : "Withdrawing consent stops all outbound contact for this lead."}
+                    </p>
+                  </section>
+
                   <div ref={historyRef} className="scroll-mt-4">
                     <SectionHeading
                       icon={Clock}
@@ -1004,6 +1149,57 @@ export function LeadDetailDrawer({
                 </div>
               ) : null}
             </div>
+
+            {confirmingOptOut && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-charcoal/40 backdrop-blur-sm">
+                <div className="w-full max-w-sm rounded-xl border border-charcoal/10 bg-white p-6 shadow-2xl">
+                  <h3 className="font-display text-lg leading-tight text-charcoal">
+                    Confirm opt-out
+                  </h3>
+                  <p className="mt-2 text-sm leading-6 text-charcoal/65">
+                    Withdraw contact consent for{" "}
+                    <span className="font-semibold text-charcoal">
+                      {detail?.full_name}
+                    </span>
+                    ? No further contact will be initiated for this lead.
+                  </p>
+                  <div className="mt-5 flex items-end justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingOptOut(false)}
+                      className="min-h-10 inline-flex items-center justify-center gap-1.5 rounded-lg border border-charcoal/15 bg-white px-4 text-[0.7rem] font-semibold text-charcoal transition-colors hover:border-charcoal/25 hover:text-charcoal">
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setConfirmingOptOut(false);
+                        optOutMutation.mutate();
+                      }}
+                      disabled={optOutMutation.isPending}
+                      className="min-h-10 inline-flex items-center justify-center gap-1.5 rounded-lg border border-charcoal/15 bg-forest px-4 text-[0.7rem] font-semibold text-ivory transition-colors hover:bg-forest-deep disabled:opacity-50 disabled:cursor-not-allowed">
+                      {optOutMutation.isPending ? (
+                        <>
+                          <span
+                            aria-hidden="true"
+                            className="size-3.5 animate-spin rounded-full border-2 border-ivory/40 border-t-ivory motion-reduce:animate-none"
+                          />
+                          Opting out
+                        </>
+                      ) : (
+                        <>
+                          <PhoneOff
+                            aria-hidden="true"
+                            className="size-3.5"
+                          />
+                          Confirm opt-out
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </motion.div>
         </>
       )}
