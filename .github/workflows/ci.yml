@@ -91,6 +91,24 @@ jobs:
         run: npm run build
 
   # -------------------------------------------------------------------------
+  # Docker: validate Compose file and build service images (incl. seed)
+  # -------------------------------------------------------------------------
+  docker-build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate docker-compose.yml
+        run: docker compose config --quiet
+
+      - name: Build backend, frontend, and seed service images
+        run: docker compose --profile seed build
+
+  # -------------------------------------------------------------------------
   # End-to-end browser verification (Windows runner)
   # -------------------------------------------------------------------------
   # NOTE: The Puppeteer E2E suite (verify-full-e2e-suite.mjs) hardcodes
