@@ -121,7 +121,10 @@ def request_handoff(
         session, actor=actor, conversation_id=payload.conversation_id, for_update=True
     )
 
-    if conversation.status != ConversationStatus.ACTIVE.value:
+    if conversation.status not in (
+        ConversationStatus.ACTIVE.value,
+        ConversationStatus.CLOSED.value,
+    ):
         raise ConversationClosedError(conversation.status)
 
     # Prevent duplicate active handoffs

@@ -3,16 +3,26 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
   Bot,
+  Headset,
   Info,
   Loader2,
   MessageSquare,
+  Plus,
   RefreshCw,
+  RotateCcw,
   Send,
   UserCheck,
   Users,
   WifiOff,
 } from "lucide-react";
-import type { SalesConversation, SalesHandoff, SalesLead, SalesMessage, SalesProject } from "../api";
+import type {
+  SalesConversation,
+  SalesHandoff,
+  SalesLead,
+  SalesMessage,
+  SalesProject,
+} from "../api";
+import { createConversation, updateConversationStatus } from "../api";
 import { SalesHandoffBar } from "./SalesHandoffBar";
 
 type SenderType = SalesMessage["sender_type"];
@@ -32,6 +42,9 @@ interface SalesConvChatProps {
   isContextOpen: boolean;
   onOpenConvListDrawer: () => void;
   onBackToList: () => void;
+  onReopenConversation: () => void;
+  onStartNewConversation: () => void;
+  onRequestHandoff: () => void;
 }
 
 function senderLabel(senderType: SenderType): string {
@@ -145,6 +158,9 @@ export function SalesConvChat({
   isContextOpen,
   onOpenConvListDrawer,
   onBackToList,
+  onReopenConversation,
+  onStartNewConversation,
+  onRequestHandoff,
 }: SalesConvChatProps) {
   const [composerText, setComposerText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -317,12 +333,37 @@ export function SalesConvChat({
         )}
       </AnimatePresence>
 
-      {/* ── Composer ── */}
+      {/* ── Composer / closed-conversation actions ── */}
       {isClosed ? (
-        <div className="shrink-0 border-t border-charcoal/8 bg-ivory/30 px-4 py-3 text-center">
-          <p className="text-xs text-charcoal/50">
-            This conversation is closed. No new messages can be sent.
-          </p>
+        <div className="shrink-0 border-t border-charcoal/8 bg-ivory/40 px-4 py-3">
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-charcoal/70">
+              This conversation is closed. You can still read the history above.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={onReopenConversation}
+                className="inline-flex items-center gap-1.5 rounded-md border border-charcoal/20 bg-white px-3 py-1.5 text-xs font-semibold text-charcoal transition-colors hover:bg-charcoal/5"
+              >
+                <RotateCcw className="size-3.5" /> Reopen conversation
+              </button>
+              <button
+                type="button"
+                onClick={onStartNewConversation}
+                className="inline-flex items-center gap-1.5 rounded-md bg-charcoal px-3 py-1.5 text-xs font-semibold text-ivory transition-colors hover:bg-charcoal/80"
+              >
+                <Plus className="size-3.5" /> Start new conversation
+              </button>
+              <button
+                type="button"
+                onClick={onRequestHandoff}
+                className="inline-flex items-center gap-1.5 rounded-md border border-charcoal/20 bg-white px-3 py-1.5 text-xs font-semibold text-charcoal transition-colors hover:bg-charcoal/5"
+              >
+                <Headset className="size-3.5" /> Request human executive
+              </button>
+            </div>
+          </div>
         </div>
       ) : (
         <div className="shrink-0 border-t border-charcoal/8 bg-white px-4 py-3">

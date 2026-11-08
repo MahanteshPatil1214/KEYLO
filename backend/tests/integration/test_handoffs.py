@@ -10,7 +10,7 @@ Verifies:
 - Status lifecycle transitions (PENDING -> ASSIGNED -> IN_PROGRESS -> RESOLVED / CANCELLED).
 - Terminal status protection (cannot reopen RESOLVED or CANCELLED).
 - Automatic conversation flagging when AI cannot answer using approved facts.
-- Rejection of handoffs on closed conversations (400).
+- Handoff requests allowed on closed conversations (buyer can request human at any time).
 - Unauthenticated access rejection (401).
 """
 
@@ -421,13 +421,13 @@ def test_ai_assistant_auto_flags_conversation_when_facts_unavailable(
         app.dependency_overrides.pop(get_assistant_client, None)
 
 
-def test_handoff_on_closed_conversation_rejected(
+def test_handoff_on_closed_conversation_allowed(
     client: TestClient,
     override_db: None,
     buyer_headers: dict[str, str],
     active_conversation: dict[str, Any],
 ) -> None:
-    """Cannot request a human handoff on a closed conversation."""
+    """A buyer can request a human handoff on a closed conversation (doubts after closure)."""
 
     update_conversation_status(
         client,
@@ -441,8 +441,19 @@ def test_handoff_on_closed_conversation_rejected(
         json={"conversation_id": active_conversation["id"]},
         headers=buyer_headers,
     )
-    assert res.status_code == 400
-    assert "CLOSED" in res.json()["error"]["message"]
+    assert res.status_code == 201
+    body = res.json()
+    assert body["conversation_id"] == active_conversation["id"]
+    assert body["status"] == HandoffStatus.PENDING.value
+
+    # SYSTEM notification is posted to the closed thread
+    msgs = list_messages(client, buyer_headers, active_conversation["id"])
+    system_msgs = [
+        m for m in msgs["items"] if m["sender_type"] == MessageSenderType.SYSTEM.value
+    ]
+    assert any(
+        "sales executive has been notified" in m["content"] for m in system_msgs
+    )
 
 
 def test_unauthenticated_requests_return_401(

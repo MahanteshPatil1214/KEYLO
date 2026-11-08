@@ -417,7 +417,10 @@ def create_system_message(
     )
     if conversation is None:
         raise ConversationNotFoundError()
-    if conversation.status != ConversationStatus.ACTIVE.value:
+    if conversation.status not in (
+        ConversationStatus.ACTIVE.value,
+        ConversationStatus.CLOSED.value,
+    ):
         raise ConversationInactiveError(conversation.status)
 
     cleaned = content.strip()

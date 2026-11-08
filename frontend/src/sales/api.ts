@@ -852,6 +852,29 @@ export function updateConversationStatus(
   );
 }
 
+export function createConversation(payload: {
+  lead_id: string;
+  project_id: string;
+  initial_message?: string;
+  buyer_id?: string;
+}): Promise<SalesConversation> {
+  return authenticatedRequest<SalesConversation>("/conversations", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function requestConversationHandoff(
+  conversationId: string,
+): Promise<SalesHandoff> {
+  return authenticatedRequest<SalesHandoff>(
+    `/conversations/${conversationId}/handoff`,
+    {
+      method: "POST",
+    },
+  );
+}
+
 // ─── Handoff mutations ────────────────────────────────────────────────────────
 
 export function updateHandoffStatus(

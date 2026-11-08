@@ -10,6 +10,9 @@ import {
   fetchLeads,
   fetchAllProjects,
   sendSalesMessage,
+  updateConversationStatus,
+  createConversation,
+  requestConversationHandoff,
   type SalesConversation,
   type SalesMessage,
   type SalesHandoff,
@@ -203,6 +206,75 @@ export function SalesConversationsPage() {
     if (lastSentText) sendMutation.mutate(lastSentText);
   };
 
+  // ── Reopen closed conversation mutation ─────────────────────────────────
+  const reopenMutation = useMutation({
+    mutationFn: () => {
+      if (!activeConversation) throw new Error("No active conversation.");
+      return updateConversationStatus(activeConversation.id, "ACTIVE");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales", "conversations"] });
+      queryClient.invalidateQueries({
+        queryKey: ["sales", "messages", activeConversation?.id],
+      });
+      setSendError(null);
+    },
+    onError: (err: any) => {
+      setSendError(err?.message ?? "Failed to reopen conversation.");
+    },
+  });
+
+  const handleReopenConversation = () => {
+    reopenMutation.mutate();
+  };
+
+  // ── Start new conversation mutation ─────────────────────────────────────
+  const createConvMutation = useMutation({
+    mutationFn: () => {
+      if (!activeConversation || !activeLead || !activeProject)
+        throw new Error("Missing conversation context.");
+      return createConversation({
+        lead_id: activeConversation.lead_id,
+        project_id: activeConversation.project_id,
+        initial_message: "I have a follow-up question about my previous enquiry.",
+      });
+    },
+    onSuccess: (newConv) => {
+      queryClient.invalidateQueries({ queryKey: ["sales", "conversations"] });
+      setSelectedConversationId(newConv.id);
+      setSendError(null);
+    },
+    onError: (err: any) => {
+      setSendError(err?.message ?? "Failed to start a new conversation.");
+    },
+  });
+
+  const handleStartNewConversation = () => {
+    createConvMutation.mutate();
+  };
+
+  // ── Request human handoff on (possibly closed) conversation ─────────────
+  const handoffMutation = useMutation({
+    mutationFn: () => {
+      if (!activeConversation) throw new Error("No active conversation.");
+      return requestConversationHandoff(activeConversation.id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sales", "handoffs"] });
+      queryClient.invalidateQueries({ queryKey: ["sales", "conversations"] });
+      setSendError(null);
+    },
+    onError: (err: any) => {
+      setSendError(
+        err?.message ?? "Failed to request a human executive. Please try again.",
+      );
+    },
+  });
+
+  const handleRequestHandoff = () => {
+    handoffMutation.mutate();
+  };
+
   const handleSelectConversation = (id: string) => {
     setSelectedConversationId(id);
     setMobileView("chat");
@@ -264,6 +336,9 @@ export function SalesConversationsPage() {
             isContextOpen={contextDrawerOpen}
             onOpenConvListDrawer={() => setConvListDrawerOpen(true)}
             onBackToList={() => setMobileView("list")}
+            onReopenConversation={handleReopenConversation}
+            onStartNewConversation={handleStartNewConversation}
+            onRequestHandoff={handleRequestHandoff}
           />
         ) : (
           /* Empty state — no conversations at all */
