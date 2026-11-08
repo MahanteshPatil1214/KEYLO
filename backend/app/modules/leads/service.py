@@ -334,6 +334,24 @@ def check_duplicates(
     )
 
 
+def list_leads_for_buyer(
+    session: Session,
+    *,
+    actor: User,
+) -> list[LeadResponse]:
+    """Return leads linked to the current buyer's email address.
+
+    Buyers may only discover their own leads, matched by the email on their
+    account. This is used to surface DPDP opt-out for leads that have no
+    conversation history yet.
+    """
+
+    if actor.email is None:
+        return []
+    leads = repository.find_leads_by_email(session, email=actor.email.lower())
+    return [_lead_response(lead) for lead in leads]
+
+
 def list_leads(
     session: Session,
     *,

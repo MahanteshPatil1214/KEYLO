@@ -1,5 +1,6 @@
 import { API_BASE_URL, ApiError } from "../auth/api";
 import { getSession } from "../auth/session";
+import type { SalesLead } from "../sales/api";
 
 export type RoleInfo = {
   id: string;
@@ -448,4 +449,8 @@ export function optOutContact(
     method: "POST",
     body: JSON.stringify({ reason }),
   }).then(() => undefined);
+}
+
+export function fetchBuyerLeads(): Promise<SalesLead[]> {
+  return authenticatedRequest<SalesLead[]>("/leads/mine");
 }

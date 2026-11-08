@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useBuyerUser } from "./BuyerAuthGuard";
 import { clearSession } from "../auth/session";
-import { fetchBuyerConversations, optOutContact } from "./api";
+import { fetchBuyerLeads, optOutContact } from "./api";
 
 export function ProfilePage() {
   const { user } = useBuyerUser();
@@ -43,16 +43,13 @@ export function ProfilePage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetchBuyerConversations()
-      .then((response) => {
+    fetchBuyerLeads()
+      .then((leads) => {
         if (cancelled) return;
-        const ids = Array.from(
-          new Set(response.items.map((c) => c.lead_id)),
-        );
-        setLeadIds(ids);
+        setLeadIds(leads.map((lead) => lead.id));
       })
       .catch(() => {
-        // Conversations may be empty; opt-out still works if a lead exists.
+        // Leads may be empty; opt-out still works if a lead exists.
       });
     return () => {
       cancelled = true;

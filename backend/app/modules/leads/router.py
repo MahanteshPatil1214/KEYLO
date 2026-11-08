@@ -36,6 +36,7 @@ from app.modules.leads.service import (
     get_lead,
     list_lead_assignments,
     list_leads,
+    list_leads_for_buyer,
     opt_out_lead,
     update_lead,
     update_lead_status,
@@ -269,6 +270,24 @@ def list_opted_out_leads_endpoint(
         page_size=page_size,
         status=None,
     )
+
+
+@router.get(
+    "/mine",
+    response_model=list[LeadResponse],
+    summary="List leads owned by the current buyer",
+)
+def list_my_leads_endpoint(
+    current_user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+) -> list[LeadResponse]:
+    """Return leads linked to the current buyer's email address.
+
+    Buyers can discover their own leads to exercise DPDP rights such as
+    withdrawing contact consent.
+    """
+
+    return list_leads_for_buyer(db, actor=current_user)
 
 
 @router.post(

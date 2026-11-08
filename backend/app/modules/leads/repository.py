@@ -72,6 +72,22 @@ def find_duplicate_leads(
     return matches, matching_fields
 
 
+def find_leads_by_email(
+    session: Session,
+    *,
+    email: str,
+) -> list[Lead]:
+    """Return leads linked to a normalized buyer email address."""
+
+    statement = (
+        select(Lead)
+        .options(selectinload(Lead.current_assignment))
+        .where(Lead.email == email)
+        .order_by(Lead.created_at.desc())
+    )
+    return list(session.scalars(statement).all())
+
+
 def _escape_like(value: str) -> str:
     return (
         value.replace("\\", "\\\\")
