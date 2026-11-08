@@ -167,7 +167,11 @@ def chat(
     dialog_messages.append({"role": "user", "content": buyer_message.content})
 
     # 5. Build system prompt and call Groq (with booking tools when applicable)
-    system_prompt = build_system_message(approved_facts, project_name=project_name)
+    system_prompt = build_system_message(
+        approved_facts,
+        project_name=project_name,
+        rera_number=project.rera_number if project else None,
+    )
 
     client = groq_client if groq_client is not None else get_groq_client()
     assistant_reply_text: str

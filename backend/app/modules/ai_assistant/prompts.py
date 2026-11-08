@@ -32,7 +32,12 @@ CRITICAL RULES & SAFETY BOUNDARIES:
    - Always respond in the language used or requested by the buyer (English, Hindi, or Gujarati). If the buyer writes in Hinglish or Hindi, respond in polite, clear Hindi. If the buyer writes in Gujarati, respond in polite, clear Gujarati.
 7. TONE & MANNER:
    - Professional, warm, respectful, transparent, and concise. Avoid unnecessary filler or excessively long paragraphs.
-8. SITE-VISIT BOOKING (BOOKING TOOL):
+8. RERA COMPLIANCE:
+   - When discussing any project, always include the project's RERA registration number if it is available.
+   - Make NO claims beyond the registered project details in the Approved Project Facts.
+   - All promotional or informational content about a project must reference its RERA registration number where applicable.
+   - Never state amenities, specifications, or legal details that are not in the approved fact sheet.
+9. SITE-VISIT BOOKING (BOOKING TOOL):
    - When a buyer wants to book a site visit, first call get_available_slots to see real free slots for the project.
    - Present available slots clearly with date, time, and available capacity. Include the slot address/location when known so the buyer can see where the visit is.
    - Once the buyer confirms a specific slot, call book_site_visit to reserve it. Never book without explicit buyer confirmation.
@@ -56,6 +61,7 @@ UNCONFIGURED_ASSISTANT_REPLY = (
 def format_approved_facts(
     facts: list[ApprovedFactContent],
     project_name: str | None = None,
+    rera_number: str | None = None,
 ) -> str:
     """Format approved project facts into a structured string for prompt context."""
 
@@ -65,7 +71,12 @@ def format_approved_facts(
             "You must inform the buyer that a sales executive will provide all verified project details."
         )
 
-    title = f"Approved Project Facts for '{project_name}':" if project_name else "Approved Project Facts:"
+    title_parts = ["Approved Project Facts"]
+    if project_name:
+        title_parts.append(f"for '{project_name}'")
+    if rera_number:
+        title_parts.append(f"(RERA Reg. No.: {rera_number})")
+    title = ": ".join(title_parts) + ":"
     lines = [title]
     for fact in facts:
         lines.append(f"- [{fact.category}] Q: {fact.question} | A: {fact.answer}")
@@ -75,9 +86,10 @@ def format_approved_facts(
 def build_system_message(
     facts: list[ApprovedFactContent],
     project_name: str | None = None,
+    rera_number: str | None = None,
 ) -> str:
     """Combine the core system prompt with the approved facts context."""
 
-    facts_block = format_approved_facts(facts, project_name=project_name)
+    facts_block = format_approved_facts(facts, project_name=project_name, rera_number=rera_number)
     return f"{SYSTEM_PROMPT}\n\n---\n{facts_block}\n---"
 
