@@ -190,6 +190,58 @@ python scripts/prepare_demo_environment.py --reset
 
 ---
 
+## Docker Compose (Full Stack)
+
+Spin up the entire stack — PostgreSQL, FastAPI backend, and Vite frontend — with a single command:
+
+```bash
+# From the repository root
+docker compose up --build
+
+# Backend API:  http://localhost:8000
+# Frontend:     http://localhost:5173
+# API docs:     http://localhost:8000/docs
+# Database:     localhost:5432
+```
+
+**What's included**
+
+| Service | Port | Details |
+|---------|------|---------|
+| `db` | 5432 | PostgreSQL 16 (persisted via `keylo_postgres_data` volume) |
+| `backend` | 8000 | FastAPI app with auto-reload (`--reload`) |
+| `frontend` | 5173 | Vite dev server with hot module replacement |
+
+**Environment variables**
+
+Create a `.env` file at the repository root (or export variables) to override defaults:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `POSTGRES_DB` | `keylo_db` | Database name |
+| `POSTGRES_USER` | `keylo` | Database user |
+| `POSTGRES_PASSWORD` | `change-me-local-dev` | Database password |
+| `POSTGRES_PORT` | `5432` | Host port for PostgreSQL |
+| `JWT_SECRET_KEY` | `change-me-...` | JWT signing secret (change in production) |
+| `GROQ_API_KEY` | *(empty)* | Groq LLM API key for AI assistant |
+
+**Stop and clean up**
+
+```bash
+docker compose down          # Stop and remove containers
+docker compose down -v       # Also remove database volume (destroys all data)
+```
+
+**Rebuild after code changes**
+
+```bash
+docker compose up --build    # Rebuild images and restart
+```
+
+Backend source changes are picked up automatically via uvicorn `--reload`; frontend changes via Vite HMR.
+
+---
+
 ## Environment Variables
 
 Configure `backend/.env` based on `backend/.env.example`:

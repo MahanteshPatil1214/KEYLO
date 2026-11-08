@@ -1,0 +1,89 @@
+name: keylo
+
+services:
+  # ------------------------------------------------------------
+  # Database: PostgreSQL 16
+  # ------------------------------------------------------------
+  db:
+    image: postgres:16-alpine
+    container_name: keylo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-keylo_db}
+      POSTGRES_USER: ${POSTGRES_USER:-keylo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-local-dev}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - keylo_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  # ------------------------------------------------------------
+  # Backend: FastAPI (Python 3.13)
+  # ------------------------------------------------------------
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: keylo-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      APP_NAME: Keylo API
+      ENVIRONMENT: development
+      API_VERSION: v1
+      DEBUG: "true"
+      LOG_LEVEL: INFO
+      # Point SQLAlchemy at the db service, not localhost
+      DATABASE_URL: postgresql+psycopg2://keylo:change-me-local-dev@db:5432/keylo_db
+      CORS_ALLOWED_ORIGINS: '["http://localhost:5173","http://127.0.0.1:5173","http://frontend:5173"]'
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-use-a-random-64-character-secret-key-for-jwt-signing}
+      JWT_ALGORITHM: HS256
+      JWT_ISSUER: keylo-api
+      JWT_AUDIENCE: keylo-clients
+      ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: openai/gpt-oss-120b
+      POSTGRES_DB: keylo_db
+      POSTGRES_USER: keylo
+      POSTGRES_PASSWORD: change-me-local-dev
+      POSTGRES_PORT: 5432
+    # Volume mount for hot reload during development
+    volumes:
+      - ./backend:/app:ro
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  # ------------------------------------------------------------
+  # Frontend: React + Vite (Node 20 dev server)
+  # ------------------------------------------------------------
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      target: dev
+    container_name: keylo-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_BASE_URL: http://backend:8000/api/v1
+    # Volume mount for hot module replacement (HMR)
+    volumes:
+      - ./frontend:/app:ro
+      - /app/node_modules
+      - keylo_frontend_cache:/app/.vite
+
+volumes:
+  keylo_postgres_data:
+  keylo_frontend_cache:

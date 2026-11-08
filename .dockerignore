@@ -1,0 +1,29 @@
+# Python
+.env
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.db
+*.sqlite
+*.sqlite3
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+keylo_dev.db
+
+# Frontend
+node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.vite/
+
+# Git
+.git/
+.gitignore
+
+# OS
+.DS_Store
+Thumbs.db
