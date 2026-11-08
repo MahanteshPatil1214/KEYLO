@@ -60,7 +60,8 @@ services:
     # Volume mount for hot reload during development
     volumes:
       - ./backend:/app:ro
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    # Run migrations on startup (db must be healthy first), then start server
+    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"]
 
   # ------------------------------------------------------------
   # Frontend: React + Vite (Node 20 dev server)

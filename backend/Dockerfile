@@ -22,9 +22,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Application code (everything inside backend/ lives at /app)
 COPY backend/ ./
 
-# Run migrations so the schema is ready when the container starts
-RUN alembic upgrade head
-
 EXPOSE 8000
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
