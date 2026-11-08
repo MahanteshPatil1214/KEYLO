@@ -22,7 +22,6 @@ import type {
   SalesMessage,
   SalesProject,
 } from "../api";
-import { createConversation, updateConversationStatus } from "../api";
 import { SalesHandoffBar } from "./SalesHandoffBar";
 
 type SenderType = SalesMessage["sender_type"];
