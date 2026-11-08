@@ -2,6 +2,8 @@ import puppeteer from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
 
+const SALES_PASSWORD = process.env.KEYLO_SALES_PASSWORD || 'KeyloSales!2026#';
+
 const SCREENSHOTS_DIR = 'C:/Users/bhagy/.gemini/antigravity/brain/2afc5af3-c04f-4ddf-8f16-1c139d803384/screenshots';
 
 if (!fs.existsSync(SCREENSHOTS_DIR)) {
@@ -28,7 +30,7 @@ async function run() {
     await page.goto('http://127.0.0.1:5173/login', { waitUntil: 'networkidle0' });
 
     await page.type('input[type="email"], input[name="email"]', 'sales.demo@keylo.com');
-    await page.type('input[type="password"], input[name="password"]', 'KeyloSales!2026#');
+    await page.type('input[type="password"], input[name="password"]', SALES_PASSWORD);
     await page.click('button[type="submit"]');
 
     await page.waitForFunction(() => window.location.pathname.startsWith('/sales'), { timeout: 10000 });

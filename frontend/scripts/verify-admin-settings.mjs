@@ -3,6 +3,8 @@ import puppeteer from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
 
+const ADMIN_PASSWORD = process.env.KEYLO_ADMIN_PASSWORD || 'KeyloAdmin!2026#';
+
 const SCREENSHOTS_DIR = 'C:/Users/bhagy/.gemini/antigravity/brain/2afc5af3-c04f-4ddf-8f16-1c139d803384/screenshots';
 
 if (!fs.existsSync(SCREENSHOTS_DIR)) {
@@ -98,7 +100,7 @@ async function run() {
     const emailInput = await page.waitForSelector('input[type="email"]');
     await emailInput.type('admin.demo@keylo.com');
     const passwordInput = await page.waitForSelector('input[type="password"]');
-    await passwordInput.type('KeyloAdmin!2026#');
+    await passwordInput.type(ADMIN_PASSWORD);
 
     const submitBtn = await page.waitForSelector('button[type="submit"]');
     await submitBtn.click();

@@ -3,6 +3,11 @@ import puppeteer from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
 
+// Demo credentials — read from environment variables for safety, fall back to local demo defaults
+const ADMIN_PASSWORD = process.env.KEYLO_ADMIN_PASSWORD || 'KeyloAdmin!2026#';
+const SALES_PASSWORD = process.env.KEYLO_SALES_PASSWORD || 'KeyloSales!2026#';
+const BUYER_PASSWORD = process.env.KEYLO_BUYER_PASSWORD || 'KeyloBuyer!2026#';
+
 const SCREENSHOTS_DIR = 'C:/Users/bhagy/.gemini/antigravity/brain/2afc5af3-c04f-4ddf-8f16-1c139d803384/screenshots';
 
 if (!fs.existsSync(SCREENSHOTS_DIR)) {
@@ -91,7 +96,7 @@ async function run() {
     console.log('\n--- TEST 1: Admin Console Verification ---');
     await page.goto('http://127.0.0.1:5173/login', { waitUntil: 'networkidle2' });
     await page.type('input[type="email"]', 'admin.demo@keylo.com');
-    await page.type('input[type="password"]', 'KeyloAdmin!2026#');
+    await page.type('input[type="password"]', ADMIN_PASSWORD);
     await page.click('button[type="submit"]');
 
     await page.waitForNavigation({ waitUntil: 'networkidle2' });
@@ -131,7 +136,7 @@ async function run() {
     await page.evaluate(() => localStorage.clear());
     await page.goto('http://127.0.0.1:5173/login', { waitUntil: 'networkidle2' });
     await page.type('input[type="email"]', 'sales.demo@keylo.com');
-    await page.type('input[type="password"]', 'KeyloSales!2026#');
+    await page.type('input[type="password"]', SALES_PASSWORD);
     await page.click('button[type="submit"]');
 
     await page.waitForNavigation({ waitUntil: 'networkidle2' });
@@ -157,7 +162,7 @@ async function run() {
     await page.evaluate(() => localStorage.clear());
     await page.goto('http://127.0.0.1:5173/login', { waitUntil: 'networkidle2' });
     await page.type('input[type="email"]', 'buyer.demo@keylo.com');
-    await page.type('input[type="password"]', 'KeyloBuyer!2026#');
+    await page.type('input[type="password"]', BUYER_PASSWORD);
     await page.click('button[type="submit"]');
 
     await page.waitForNavigation({ waitUntil: 'networkidle2' });
