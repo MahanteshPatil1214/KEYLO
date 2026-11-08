@@ -37,3 +37,6 @@ Thumbs.db
 # Frontend dependencies and build output
 node_modules/
 frontend/dist/
+
+# E2E verification screenshots
+e2e-screenshots/

@@ -150,17 +150,7 @@ jobs:
           KEYLO_SALES_PASSWORD: KeyloSales!2026#
           KEYLO_ADMIN_EMAIL: admin.demo@keylo.com
           KEYLO_ADMIN_PASSWORD: KeyloAdmin!2026#
-        run: |
-          # Patch the E2E script to use the CI-installed Chrome instead of a
-          # hardcoded Windows path, then run it.
-          powershell -Command @"
-          $script = Get-Content -Path 'frontend/scripts/verify-full-e2e-suite.mjs' -Raw
-          $script = $script -replace "C:\\\\Program Files\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe", (Get-Command chrome).Source
-          $script = $script -replace "backend\\\\.venv\\\\Scripts\\\\python.exe", (Get-Command python).Source
-          $script = $script -replace "npm\.cmd", "npm"
-          $script | Set-Content -Path 'frontend/scripts/verify-full-e2e-suite.mjs'
-          "@
-          node frontend/scripts/verify-full-e2e-suite.mjs
+        run: node frontend/scripts/verify-full-e2e-suite.mjs
 
   # -------------------------------------------------------------------------
   # Deployment placeholder (extend when a production target is defined)

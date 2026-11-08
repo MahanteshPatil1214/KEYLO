@@ -2,11 +2,44 @@ import { spawn, execSync } from 'child_process';
 import puppeteer from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 
-const SCREENSHOTS_DIR = 'C:/Users/bhagy/.gemini/antigravity/brain/2afc5af3-c04f-4ddf-8f16-1c139d803384/screenshots';
+const isWindows = os.platform() === 'win32';
+const SCREENSHOTS_DIR = path.resolve('e2e-screenshots');
 
 if (!fs.existsSync(SCREENSHOTS_DIR)) {
   fs.mkdirSync(SCREENSHOTS_DIR, { recursive: true });
+}
+
+function getPythonExecutable() {
+  if (isWindows) {
+    return path.resolve('backend/.venv/Scripts/python.exe');
+  }
+  return path.resolve('backend/.venv/bin/python');
+}
+
+function getNpmCommand() {
+  return isWindows ? 'npm.cmd' : 'npm';
+}
+
+function getChromeExecutablePath() {
+  // Let Puppeteer resolve Chrome from PUPPETEER_EXECUTABLE_PATH or its bundled
+  // Chromium. Fall back to common Windows install locations when running locally.
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    return process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
+  if (isWindows) {
+    const commonPaths = [
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    ];
+    for (const p of commonPaths) {
+      if (fs.existsSync(p)) {
+        return p;
+      }
+    }
+  }
+  return undefined;
 }
 
 function waitPort(port, timeoutMs = 25000) {
@@ -38,12 +71,12 @@ async function run() {
 
   // 1. Build frontend dist
   console.log('\n--- 1. Building Production Frontend Assets ---');
-  execSync('npm.cmd --prefix frontend run build', { stdio: 'inherit' });
+  execSync(`${getNpmCommand()} --prefix frontend run build`, { stdio: 'inherit' });
 
   // 2. Start FastAPI Backend
   console.log('\n--- 2. Starting FastAPI Backend on port 8000 ---');
   const backendProc = spawn(
-    path.resolve('backend/.venv/Scripts/python.exe'),
+    getPythonExecutable(),
     ['-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', '8000'],
     {
       cwd: path.resolve('backend'),
@@ -67,7 +100,7 @@ async function run() {
   // 3. Start Frontend Preview
   console.log('\n--- 3. Starting Frontend Preview Server on port 5173 ---');
   const frontendProc = spawn(
-    'npm.cmd',
+    getNpmCommand(),
     ['--prefix', 'frontend', 'run', 'preview', '--', '--host', '127.0.0.1', '--port', '5173'],
     {
       cwd: path.resolve('.'),
@@ -89,7 +122,7 @@ async function run() {
 
     browser = await puppeteer.launch({
       headless: true,
-      executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      executablePath: getChromeExecutablePath(),
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu'],
     });
 
