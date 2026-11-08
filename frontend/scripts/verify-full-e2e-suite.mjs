@@ -149,8 +149,11 @@ async function run() {
     console.log('\n--- TEST 2: Buyer Authentication Flow ---');
     await page.goto('http://127.0.0.1:5173/login', { waitUntil: 'networkidle0' });
 
-    const buyerEmail = process.env.KEYLO_BUYER_EMAIL || 'ananya.buyer@keylo.com';
-    const buyerPassword = process.env.KEYLO_BUYER_PASSWORD || 'KeyloBuyer!2026#';
+    const buyerEmail = process.env.KEYLO_BUYER_EMAIL;
+    const buyerPassword = process.env.KEYLO_BUYER_PASSWORD;
+    if (!buyerEmail || !buyerPassword) {
+      throw new Error('Missing required env vars: KEYLO_BUYER_EMAIL, KEYLO_BUYER_PASSWORD');
+    }
 
     await page.type('input[type="email"], input[name="email"]', buyerEmail);
     await page.type('input[type="password"], input[name="password"]', buyerPassword);
@@ -203,8 +206,11 @@ async function run() {
     console.log('\n--- TEST 4: Sales Executive Workspace Flow ---');
     await page.goto('http://127.0.0.1:5173/login', { waitUntil: 'networkidle0' });
 
-    const salesEmail = process.env.KEYLO_SALES_EMAIL || 'maya.sales@keylo.com';
-    const salesPassword = process.env.KEYLO_SALES_PASSWORD || 'KeyloSales!2026#';
+    const salesEmail = process.env.KEYLO_SALES_EMAIL;
+    const salesPassword = process.env.KEYLO_SALES_PASSWORD;
+    if (!salesEmail || !salesPassword) {
+      throw new Error('Missing required env vars: KEYLO_SALES_EMAIL, KEYLO_SALES_PASSWORD');
+    }
 
     await page.type('input[type="email"], input[name="email"]', salesEmail);
     await page.type('input[type="password"], input[name="password"]', salesPassword);
@@ -243,8 +249,11 @@ async function run() {
     console.log('\n--- TEST 5: Admin Console Comprehensive Flow ---');
     await page.goto('http://127.0.0.1:5173/login', { waitUntil: 'networkidle0' });
 
-    const adminEmail = process.env.KEYLO_ADMIN_EMAIL || 'admin.demo@keylo.com';
-    const adminPassword = process.env.KEYLO_ADMIN_PASSWORD || 'KeyloAdmin!2026#';
+    const adminEmail = process.env.KEYLO_ADMIN_EMAIL;
+    const adminPassword = process.env.KEYLO_ADMIN_PASSWORD;
+    if (!adminEmail || !adminPassword) {
+      throw new Error('Missing required env vars: KEYLO_ADMIN_EMAIL, KEYLO_ADMIN_PASSWORD');
+    }
 
     await page.type('input[type="email"], input[name="email"]', adminEmail);
     await page.type('input[type="password"], input[name="password"]', adminPassword);

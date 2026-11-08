@@ -3,7 +3,8 @@ import puppeteer from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
 
-const ADMIN_PASSWORD = process.env.KEYLO_ADMIN_PASSWORD || 'KeyloAdmin!2026#';
+const ADMIN_PASSWORD = process.env.KEYLO_ADMIN_PASSWORD;
+if (!ADMIN_PASSWORD) throw new Error('Missing required env var KEYLO_ADMIN_PASSWORD');
 
 const SCREENSHOTS_DIR = 'C:/Users/bhagy/.gemini/antigravity/brain/2afc5af3-c04f-4ddf-8f16-1c139d803384/screenshots';
 

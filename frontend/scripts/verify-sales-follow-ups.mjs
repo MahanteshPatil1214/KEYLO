@@ -2,7 +2,8 @@ import puppeteer from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
 
-const SALES_PASSWORD = process.env.KEYLO_SALES_PASSWORD || 'KeyloSales!2026#';
+const SALES_PASSWORD = process.env.KEYLO_SALES_PASSWORD;
+if (!SALES_PASSWORD) throw new Error('Missing required env var KEYLO_SALES_PASSWORD');
 
 const SCREENSHOTS_DIR = 'C:/Users/bhagy/.gemini/antigravity/brain/2afc5af3-c04f-4ddf-8f16-1c139d803384/screenshots';
 

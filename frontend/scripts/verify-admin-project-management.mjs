@@ -97,7 +97,8 @@ async function run() {
     await page.goto('http://127.0.0.1:5173/login', { waitUntil: 'networkidle0' });
 
     const adminEmail = process.env.KEYLO_ADMIN_EMAIL || 'admin.demo@keylo.com';
-    const adminPassword = process.env.KEYLO_ADMIN_PASSWORD || 'KeyloAdmin!2026#';
+    const adminPassword = process.env.KEYLO_ADMIN_PASSWORD;
+if (!adminPassword) throw new Error('Missing required env var KEYLO_ADMIN_PASSWORD');
 
     await page.type('input[type="email"], input[name="email"]', adminEmail);
     await page.type('input[type="password"], input[name="password"]', adminPassword);

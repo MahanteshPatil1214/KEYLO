@@ -162,12 +162,12 @@ jobs:
       - name: Run full E2E browser verification suite
         working-directory: ./
         env:
-          KEYLO_BUYER_EMAIL: buyer.demo@keylo.com
-          KEYLO_BUYER_PASSWORD: KeyloBuyer!2026#
-          KEYLO_SALES_EMAIL: sales.demo@keylo.com
-          KEYLO_SALES_PASSWORD: KeyloSales!2026#
-          KEYLO_ADMIN_EMAIL: admin.demo@keylo.com
-          KEYLO_ADMIN_PASSWORD: KeyloAdmin!2026#
+          KEYLO_BUYER_EMAIL: ${{ secrets.KEYLO_BUYER_EMAIL }}
+          KEYLO_BUYER_PASSWORD: ${{ secrets.KEYLO_BUYER_PASSWORD }}
+          KEYLO_SALES_EMAIL: ${{ secrets.KEYLO_SALES_EMAIL }}
+          KEYLO_SALES_PASSWORD: ${{ secrets.KEYLO_SALES_PASSWORD }}
+          KEYLO_ADMIN_EMAIL: ${{ secrets.KEYLO_ADMIN_EMAIL }}
+          KEYLO_ADMIN_PASSWORD: ${{ secrets.KEYLO_ADMIN_PASSWORD }}
         run: node frontend/scripts/verify-full-e2e-suite.mjs
 
   # -------------------------------------------------------------------------

@@ -284,9 +284,9 @@ Configure `backend/.env` based on `backend/.env.example`:
 
 | Portal | Role | Email | Password | Primary URL |
 | :--- | :--- | :--- | :--- | :--- |
-| **Admin Console** | `ADMIN` | `admin.demo@keylo.com` | `KeyloAdmin!2026#` | [http://127.0.0.1:5173/admin](http://127.0.0.1:5173/admin) |
-| **Sales Workspace** | `SALES_EXECUTIVE` | `sales.demo@keylo.com` | `KeyloSales!2026#` | [http://127.0.0.1:5173/sales](http://127.0.0.1:5173/sales) |
-| **Buyer Portal** | `BUYER` | `buyer.demo@keylo.com` | `KeyloBuyer!2026#` | [http://127.0.0.1:5173/buyer](http://127.0.0.1:5173/buyer) |
+| **Admin Console** | `ADMIN` | `admin.demo@keylo.com` | set via `KEYLO_ADMIN_PASSWORD` | [http://127.0.0.1:5173/admin](http://127.0.0.1:5173/admin) |
+| **Sales Workspace** | `SALES_EXECUTIVE` | `sales.demo@keylo.com` | set via `KEYLO_SALES_PASSWORD` | [http://127.0.0.1:5173/sales](http://127.0.0.1:5173/sales) |
+| **Buyer Portal** | `BUYER` | `buyer.demo@keylo.com` | set via `KEYLO_BUYER_PASSWORD` | [http://127.0.0.1:5173/buyer](http://127.0.0.1:5173/buyer) |
 
 ---
 

@@ -188,9 +188,9 @@ For a self-hosted VPS, a `docker-compose.yml` can orchestrate:
 
 | Role | Email | Password |
 |------|-------|----------|
-| Admin | `admin.demo@keylo.com` | `KeyloAdmin!2026#` |
-| Sales Executive | `sales.demo@keylo.com` | `KeyloSales!2026#` |
-| Buyer | `buyer.demo@keylo.com` | `KeyloBuyer!2026#` |
+| Admin | `admin.demo@keylo.com` | set via `KEYLO_ADMIN_PASSWORD` |
+| Sales Executive | `sales.demo@keylo.com` | set via `KEYLO_SALES_PASSWORD` |
+| Buyer | `buyer.demo@keylo.com` | set via `KEYLO_BUYER_PASSWORD` |
 
 Change these by setting the corresponding environment variables before running the seed script:
 
