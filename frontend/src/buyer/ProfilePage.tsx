@@ -183,52 +183,56 @@ export function ProfilePage() {
           <p className="text-xs text-charcoal/70 leading-relaxed">
             Your personal contact details and conversation logs are encrypted in accordance with industry security standards and accessed only by authorized property consultants.
           </p>
-            {leadIds.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-charcoal/10">
-                <p className="mb-2 text-[0.62rem] font-semibold tracking-[0.14em] text-charcoal/60 uppercase">
-                  DPDP contact consent
+          <div className="mt-4 pt-4 border-t border-charcoal/10">
+            <p className="mb-2 text-[0.62rem] font-semibold tracking-[0.14em] text-charcoal/60 uppercase">
+              DPDP contact consent
+            </p>
+            <div className="flex items-center gap-2">
+              <span
+                className={`inline-flex items-center gap-1.5 text-[0.72rem] font-semibold ${optOutCompleted ? "text-forest" : "text-charcoal"}`}>
+                <CheckCircle2
+                  aria-hidden="true"
+                  className="size-3.5"
+                />
+                {optOutCompleted ? "Contact consent withdrawn" : "Active"}
+              </span>
+            </div>
+            {!optOutCompleted && leadIds.length === 0 ? (
+              <p className="mt-1 text-[0.64rem] leading-4 text-charcoal/55">
+                You have no active enquiries yet. Once you submit an enquiry,
+                you can withdraw contact consent here to stop calls, emails,
+                WhatsApp messages, and visit reminders for your leads.
+              </p>
+            ) : null}
+            {!optOutCompleted && leadIds.length > 0 ? (
+              <>
+                <p className="mt-1 text-[0.64rem] leading-4 text-charcoal/55">
+                  Withdraw consent to stop calls, emails, WhatsApp messages,
+                  and visit reminders for your enquiries.
                 </p>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`inline-flex items-center gap-1.5 text-[0.72rem] font-semibold ${optOutCompleted ? "text-forest" : "text-charcoal"}`}>
-                    <CheckCircle2
-                      aria-hidden="true"
-                      className="size-3.5"
-                    />
-                    {optOutCompleted ? "Contact consent withdrawn" : "Active"}
-                  </span>
-                </div>
-                {optOutCompleted ? (
-                  <p className="mt-1 text-[0.64rem] leading-4 text-charcoal/55">
-                    You will no longer receive calls, emails, WhatsApp
-                    messages, or visit reminders for your enquiries.
-                  </p>
-                ) : null}
-                {!optOutCompleted && (
-                  <button
-                    type="button"
-                    onClick={() => setOptOutConfirming(true)}
-                    disabled={optOutLoading}
-                    className="mt-3 inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-charcoal/15 bg-white px-4 text-[0.7rem] font-semibold text-charcoal transition-colors hover:border-charcoal/25 hover:text-charcoal disabled:opacity-50 disabled:cursor-not-allowed">
-                    {optOutLoading ? (
-                      <>
-                        <span
-                          aria-hidden="true"
-                          className="size-3.5 animate-spin rounded-full border-2 border-ivory/40 border-t-ivory motion-reduce:animate-none"
-                        />
-                        Updating
-                      </>
-                    ) : (
-                      <>
-                        <PhoneOff
-                          aria-hidden="true"
-                          className="size-3.5"
-                        />
-                        Opt out of contact
-                      </>
-                    )}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setOptOutConfirming(true)}
+                  disabled={optOutLoading}
+                  className="mt-3 inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-charcoal/15 bg-white px-4 text-[0.7rem] font-semibold text-charcoal transition-colors hover:border-charcoal/25 hover:text-charcoal disabled:opacity-50 disabled:cursor-not-allowed">
+                  {optOutLoading ? (
+                    <>
+                      <span
+                        aria-hidden="true"
+                        className="size-3.5 animate-spin rounded-full border-2 border-ivory/40 border-t-ivory motion-reduce:animate-none"
+                      />
+                      Updating
+                    </>
+                  ) : (
+                    <>
+                      <PhoneOff
+                        aria-hidden="true"
+                        className="size-3.5"
+                      />
+                      Opt out of contact
+                    </>
+                  )}
+                </button>
                 {optOutError && (
                   <p className="mt-2 flex items-start gap-1.5 text-sm leading-5 text-clay">
                     <AlertCircle
@@ -238,8 +242,15 @@ export function ProfilePage() {
                     {optOutError}
                   </p>
                 )}
-              </div>
+              </>
+            ) : null}
+            {optOutCompleted && (
+              <p className="mt-1 text-[0.64rem] leading-4 text-charcoal/55">
+                You will no longer receive calls, emails, WhatsApp
+                messages, or visit reminders for your enquiries.
+              </p>
             )}
+          </div>
           </div>
 
         <div className="rounded-2xl border border-charcoal/10 bg-white p-6 shadow-xs space-y-3">
