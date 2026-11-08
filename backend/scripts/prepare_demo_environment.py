@@ -188,15 +188,9 @@ def seed_demo_environment() -> dict[str, int]:
 
     Base.metadata.create_all(bind=engine)
 
-    admin_pw = os.getenv("KEYLO_ADMIN_PASSWORD")
-    if not admin_pw:
-        raise SystemExit("KEYLO_ADMIN_PASSWORD environment variable is required")
-    sales_pw = os.getenv("KEYLO_SALES_PASSWORD")
-    if not sales_pw:
-        raise SystemExit("KEYLO_SALES_PASSWORD environment variable is required")
-    buyer_pw = os.getenv("KEYLO_BUYER_PASSWORD")
-    if not buyer_pw:
-        raise SystemExit("KEYLO_BUYER_PASSWORD environment variable is required")
+    admin_pw = os.getenv("KEYLO_ADMIN_PASSWORD", "Admin@123")
+    sales_pw = os.getenv("KEYLO_SALES_PASSWORD", "Sales@123")
+    buyer_pw = os.getenv("KEYLO_BUYER_PASSWORD", "Buyer@123")
 
     with SessionLocal() as session:
         seed_roles(session)
