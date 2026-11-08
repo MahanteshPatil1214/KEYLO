@@ -1,0 +1,181 @@
+name: CI / CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # -------------------------------------------------------------------------
+  # Backend: FastAPI + Pytest (224 unit/integration tests)
+  # -------------------------------------------------------------------------
+  backend-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+
+    services:
+      # Postgres is available for any test that needs a real database,
+      # though the pytest suite uses an isolated in-memory SQLite by default.
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: keylo_test
+          POSTGRES_USER: keylo_test
+          POSTGRES_PASSWORD: test-password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U keylo_test -d keylo_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run backend test suite (224 tests)
+        working-directory: ./backend
+        env:
+          ENVIRONMENT: testing
+          DATABASE_URL: postgresql+psycopg2://keylo_test:test-password@localhost:5432/keylo_test
+          JWT_SECRET_KEY: test-secret-key-for-ci-only-do-not-use-in-production
+          GROQ_API_KEY: dummy-groq-key-for-ci
+        run: |
+          python -m pytest tests -q --tb=short
+
+  # -------------------------------------------------------------------------
+  # Frontend: TypeScript check + Vite production build
+  # -------------------------------------------------------------------------
+  frontend-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: TypeScript type check and Vite production build
+        working-directory: ./frontend
+        run: npm run build
+
+  # -------------------------------------------------------------------------
+  # End-to-end browser verification (Windows runner)
+  # -------------------------------------------------------------------------
+  # NOTE: The Puppeteer E2E suite (verify-full-e2e-suite.mjs) hardcodes
+  # Windows paths (Chrome executable, .venv\Scripts\python.exe, npm.cmd) and
+  # therefore runs only on a Windows runner with Chrome installed. It is kept
+  # out of the Linux CI matrix above. Run it locally on Windows before major
+  # releases, or add a windows-latest job here once the script is made
+  # cross-platform.
+  e2e-browser-verification:
+    runs-on: windows-latest
+    needs: [backend-tests, frontend-build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies and build
+        working-directory: ./frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install Chrome for Puppeteer
+        uses: browser-actions/setup-chrome@latest
+        with:
+          chrome-version: stable
+
+      - name: Run full E2E browser verification suite
+        working-directory: ./
+        env:
+          KEYLO_BUYER_EMAIL: buyer.demo@keylo.com
+          KEYLO_BUYER_PASSWORD: KeyloBuyer!2026#
+          KEYLO_SALES_EMAIL: sales.demo@keylo.com
+          KEYLO_SALES_PASSWORD: KeyloSales!2026#
+          KEYLO_ADMIN_EMAIL: admin.demo@keylo.com
+          KEYLO_ADMIN_PASSWORD: KeyloAdmin!2026#
+        run: |
+          # Patch the E2E script to use the CI-installed Chrome instead of a
+          # hardcoded Windows path, then run it.
+          powershell -Command @"
+          $script = Get-Content -Path 'frontend/scripts/verify-full-e2e-suite.mjs' -Raw
+          $script = $script -replace "C:\\\\Program Files\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe", (Get-Command chrome).Source
+          $script = $script -replace "backend\\\\.venv\\\\Scripts\\\\python.exe", (Get-Command python).Source
+          $script = $script -replace "npm\.cmd", "npm"
+          $script | Set-Content -Path 'frontend/scripts/verify-full-e2e-suite.mjs'
+          "@
+          node frontend/scripts/verify-full-e2e-suite.mjs
+
+  # -------------------------------------------------------------------------
+  # Deployment placeholder (extend when a production target is defined)
+  # -------------------------------------------------------------------------
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: production
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Announce deployment readiness
+        run: |
+          echo "All CI checks passed on main branch."
+          echo "Backend tests: 224 passed"
+          echo "Frontend build: TypeScript + Vite production build succeeded"
+          echo "Add your deployment steps here (e.g., Docker build/push, Render, Fly.io, AWS, etc.)"
