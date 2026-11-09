@@ -35,6 +35,7 @@ class TokenClaims:
     subject: UUID
     role: str
     token_type: str
+    jti: str
     issued_at: int
     expires_at: int
 
@@ -160,13 +161,54 @@ def decode_access_token(
 
     issued_at = payload.get("iat")
     expires_at = payload.get("exp")
+    jti = payload.get("jti")
     if not isinstance(issued_at, int) or not isinstance(expires_at, int):
         raise TokenValidationError("Access token timestamps are invalid.")
+    if not isinstance(jti, str) or not jti.strip():
+        raise TokenValidationError("Access token JTI is invalid.")
 
     return TokenClaims(
         subject=user_id,
         role=role,
         token_type="access",
+        jti=jti,
         issued_at=issued_at,
         expires_at=expires_at,
     )
+
+
+def create_refresh_token(
+    *,
+    user_id: UUID,
+    settings: Settings | None = None,
+    expires_delta: timedelta | None = None,
+) -> tuple[str, datetime]:
+    """Create an opaque refresh token and its expiration.
+
+    Returns ``(plain_token, expires_at)``. The plain token must be shown to
+    the client exactly once; only its Argon2 hash is persisted.
+    """
+
+    config = settings or get_settings()
+    issued_at = datetime.now(UTC)
+    lifetime = expires_delta or timedelta(
+        minutes=config.refresh_token_expire_minutes
+    )
+    expires_at = issued_at + lifetime
+    plain_token = secrets.token_urlsafe(48)
+    return plain_token, expires_at
+
+
+def hash_token(token: str) -> str:
+    """Hash an opaque token with Argon2 for storage."""
+
+    return _PASSWORD_HASHER.hash(token)
+
+
+def verify_token(plain_token: str, token_hash: str) -> bool:
+    """Verify a plain token against its stored Argon2 hash without raising."""
+
+    try:
+        return _PASSWORD_HASHER.verify(token_hash, plain_token)
+    except (VerificationError, InvalidHashError):
+        return False

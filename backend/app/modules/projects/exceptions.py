@@ -56,3 +56,18 @@ class FactNotFoundError(HTTPException):
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Fact not found.",
         )
+
+
+class ProjectHasDependentsError(HTTPException):
+    """A project cannot be deleted while it still has dependent records."""
+
+    def __init__(self, dependent_type: str | None = None) -> None:
+        detail = (
+            "Cannot delete project: it has dependent records"
+            + (f" ({dependent_type})" if dependent_type else "")
+            + ". Remove or reassign them first, then retry."
+        )
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=detail,
+        )

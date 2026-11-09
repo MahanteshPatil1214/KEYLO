@@ -13,8 +13,13 @@ from app.db.session import get_db
 from app.modules.auth.exceptions import (
     InactiveUserError,
     InvalidTokenError,
+    TokenRevokedError,
 )
 from app.modules.auth.security import TokenValidationError, decode_access_token
+from app.modules.auth.service import (
+    cleanup_expired_revocations,
+    is_access_token_revoked,
+)
 from app.modules.users import repository
 from app.modules.users.exceptions import InsufficientPermissionsError
 from app.modules.users.models import RoleName, User
@@ -45,6 +50,12 @@ def get_current_user(
         claims = decode_access_token(credentials.credentials)
     except TokenValidationError as exc:
         raise InvalidTokenError() from exc
+
+    # Server-side revocation: reject access tokens whose JTI has been
+    # revoked (for example on logout) before they naturally expire.
+    if is_access_token_revoked(db, jti=claims.jti):
+        cleanup_expired_revocations(db)
+        raise TokenRevokedError() from None
 
     user = repository.get_user_by_id(db, claims.subject)
     if user is None:

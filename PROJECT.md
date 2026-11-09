@@ -385,6 +385,12 @@ initial MVP.
     must not make claims beyond registered details.
 -   Do not send WhatsApp business messages in the MVP; future WhatsApp
     support must respect opt-in and approved templates.
+-   Administrators can hard-delete projects and facts (refused while
+    dependent records such as leads, bookings, or conversations exist).
+-   Access sessions can be revoked server-side: login issues a refresh
+    token, and logout/revoke-all revokes all refresh tokens for a user.
+    Revoked access tokens are rejected before they expire via a JTI
+    revocation list.
 
 This is an assignment prototype. Production legal and compliance review
 would be required before real customer deployment.

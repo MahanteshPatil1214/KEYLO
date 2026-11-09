@@ -109,12 +109,54 @@ class LoginRequest(BaseModel):
         return str(value).strip().lower()
 
 
-class TokenResponse(BaseModel):
-    """Access-token response.
+from app.modules.auth.security import validate_password_strength
 
-    Refresh tokens are intentionally not issued in this module.
+
+class TokenResponse(BaseModel):
+    """Access-token response, issued together with a refresh token at login.
+
+    The access token is short-lived; the refresh token is long-lived and can
+    be exchanged for a new access token until it expires or is revoked.
     """
 
     access_token: str
     token_type: Literal["bearer"] = "bearer"
     expires_in: int
+    refresh_token: str
+    refresh_expires_in: int
+
+
+class RefreshTokenRequest(BaseModel):
+    """Request to exchange a refresh token for a new access token."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    refresh_token: str = Field(min_length=1)
+
+
+class RefreshTokenResponse(BaseModel):
+    """New access token issued in exchange for a valid refresh token."""
+
+    access_token: str
+    token_type: Literal["bearer"] = "bearer"
+    expires_in: int
+
+
+class LogoutRequest(BaseModel):
+    """Request to revoke the current access token and refresh token."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    refresh_token: str | None = Field(default=None, min_length=1)
+
+
+class LogoutResponse(BaseModel):
+    """Confirmation that the current session was revoked."""
+
+    message: str
+
+
+class RevokeAllResponse(BaseModel):
+    """Confirmation that all of a user's sessions were revoked."""
+
+    message: str

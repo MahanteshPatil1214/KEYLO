@@ -13,6 +13,7 @@ from app.modules.projects import repository
 from app.modules.projects.exceptions import (
     FactNotFoundError,
     InvalidProjectStatusTransitionError,
+    ProjectHasDependentsError,
     ProjectNotFoundError,
     ProjectSlugAlreadyExistsError,
 )
@@ -33,10 +34,12 @@ from app.modules.projects.schemas import (
     FactVersionResponse,
     PendingFactChanges,
     ProjectCreateRequest,
+    ProjectDeletionResponse,
     ProjectListResponse,
     ProjectMetricsResponse,
     ProjectResponse,
     ProjectUpdateRequest,
+    FactDeletionResponse,
     normalize_category,
     normalize_slug,
 )
@@ -310,6 +313,56 @@ def update_project(
 
     session.refresh(project)
     return _project_response(project)
+
+
+def delete_project(
+    session: Session,
+    *,
+    actor: User,
+    project_id: UUID,
+) -> ProjectDeletionResponse:
+    """Hard-delete a project and all of its facts.
+
+    Only an administrator may delete a project. Deletion is refused with a
+    ``409`` when the project still has dependent records (leads, visit slots,
+    bookings, or conversations) so that related data is not orphaned.
+    """
+
+    _require_admin(actor)
+    project = repository.get_project_by_id(session, project_id)
+    if project is None:
+        raise ProjectNotFoundError()
+
+    # Lazy imports keep the projects repository free of cross-module imports.
+    from app.modules.bookings.models import Booking, VisitSlot
+    from app.modules.conversations.models import Conversation
+    from app.modules.leads.models import Lead
+
+    from sqlalchemy import func, select
+
+    dependent_checks = [
+        (Lead, "leads"),
+        (VisitSlot, "visit slots"),
+        (Booking, "bookings"),
+        (Conversation, "conversations"),
+    ]
+    for model, label in dependent_checks:
+        count = session.scalar(
+            select(func.count()).select_from(model).where(
+                model.project_id == project_id  # type: ignore[attr-defined]
+            )
+        )
+        if count:
+            raise ProjectHasDependentsError(label)
+
+    session.delete(project)
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise ProjectHasDependentsError()
+
+    return ProjectDeletionResponse(id=project_id, deleted=True)
 
 
 def create_fact(
@@ -587,6 +640,33 @@ def reject_fact(
     _commit(session)
     session.refresh(fact)
     return _fact_response(fact, include_internal=True)
+
+
+def delete_fact(
+    session: Session,
+    *,
+    actor: User,
+    fact_id: UUID,
+) -> FactDeletionResponse:
+    """Hard-delete a fact and its version history.
+
+    Only an administrator may delete a fact. Version history cascades through
+    the ORM relationship.
+    """
+
+    _require_admin(actor)
+    fact = repository.get_fact_by_id(session, fact_id)
+    if fact is None:
+        raise FactNotFoundError()
+
+    session.delete(fact)
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        raise
+
+    return FactDeletionResponse(id=fact_id, deleted=True)
 
 
 def list_fact_versions(
