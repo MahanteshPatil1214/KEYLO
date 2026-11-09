@@ -34,6 +34,39 @@ def create_conversation(
     return response.json()
 
 
+def start_conversation(
+    client: TestClient,
+    headers: dict[str, str],
+    *,
+    project_id: UUID | str,
+    full_name: str = "Start Conversation Buyer",
+    email: str | None = "start-conv@example.com",
+    phone: str | None = "+919811111111",
+    source: str = "WEBSITE",
+    consent_to_contact: bool = True,
+    initial_message: str | None = None,
+    expected_status: int = 201,
+) -> dict[str, Any]:
+    """Start a conversation via POST /api/v1/conversations/start (creates lead if needed)."""
+
+    payload: dict[str, Any] = {
+        "project_id": str(project_id),
+        "full_name": full_name,
+        "source": source,
+        "consent_to_contact": consent_to_contact,
+    }
+    if email is not None:
+        payload["email"] = email
+    if phone is not None:
+        payload["phone"] = phone
+    if initial_message is not None:
+        payload["initial_message"] = initial_message
+
+    response = client.post("/api/v1/conversations/start", json=payload, headers=headers)
+    assert response.status_code == expected_status, response.text
+    return response.json()
+
+
 def get_conversation(
     client: TestClient,
     headers: dict[str, str],

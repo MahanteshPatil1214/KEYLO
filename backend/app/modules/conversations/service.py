@@ -36,7 +36,9 @@ from app.modules.conversations.schemas import (
     MessageResponse,
 )
 from app.modules.leads.exceptions import LeadNotFoundError
-from app.modules.leads.repository import get_lead_by_id
+from app.modules.leads.models import Lead, LeadStatus
+from app.modules.leads.repository import find_leads_by_email, get_lead_by_id
+from app.modules.leads.schemas import normalize_email, normalize_phone
 from app.modules.projects.exceptions import ProjectNotFoundError
 from app.modules.projects.models import ProjectStatus
 from app.modules.projects.repository import get_project_by_id
@@ -156,6 +158,125 @@ def create_conversation(
             buyer_id = buyer.id
         elif payload.buyer_id is not None:
             buyer_id = payload.buyer_id
+        else:
+            raise ConversationOwnershipError(
+                "A registered buyer account is required to start a conversation for this lead."
+            )
+    else:
+        raise ConversationOwnershipError()
+
+    now = utcnow()
+    conversation = Conversation(
+        lead_id=lead.id,
+        project_id=project.id,
+        buyer_id=buyer_id,
+        status=ConversationStatus.ACTIVE.value,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(conversation)
+    session.flush()
+
+    if payload.initial_message:
+        sender_type = (
+            MessageSenderType.BUYER
+            if actor.role.name == RoleName.BUYER.value
+            else (
+                MessageSenderType.SALES_EXECUTIVE
+                if actor.role.name == RoleName.SALES_EXECUTIVE.value
+                else MessageSenderType.SYSTEM
+            )
+        )
+        message = Message(
+            conversation_id=conversation.id,
+            sender_type=sender_type.value,
+            sender_id=actor.id,
+            content=payload.initial_message.strip(),
+            status=MessageStatus.SENT.value,
+            created_at=now,
+        )
+        session.add(message)
+
+    session.commit()
+    session.refresh(conversation)
+    return ConversationResponse.model_validate(conversation)
+
+
+def start_conversation(
+    session: Session,
+    *,
+    actor: User,
+    payload: ConversationStartRequest,
+) -> ConversationResponse:
+    """Start a conversation for a project, creating a lead if needed.
+
+    If the buyer already has a lead for this project (matched by email),
+    that lead is reused. Otherwise a new lead is created. A conversation
+    is then created linking the buyer, lead, and project so the buyer can
+    immediately chat about that specific project.
+    """
+
+    project = get_project_by_id(session, payload.project_id)
+    if project is None or (
+        not _is_admin(actor) and project.status != ProjectStatus.ACTIVE.value
+    ):
+        raise ProjectNotFoundError()
+
+    email_value = normalize_email(payload.email)
+    phone_value = normalize_phone(payload.phone) if payload.phone else None
+
+    if email_value is None and phone_value is None:
+        raise ConversationOwnershipError(
+            "At least one contact method (email or phone) is required."
+        )
+
+    # Reuse an existing lead for this buyer on this project, if any.
+    lead = None
+    if email_value:
+        existing = find_leads_by_email(session, email=email_value)
+        for candidate in existing:
+            if candidate.project_id == project.id:
+                lead = candidate
+                break
+
+    if lead is None:
+        # Create a new lead for this project (no cross-project duplicate
+        # check: a buyer may have separate leads on different projects).
+        now = utcnow()
+        lead = Lead(
+            full_name=payload.full_name,
+            email=email_value,
+            phone=phone_value,
+            project_id=project.id,
+            source=payload.source.value,
+            status=LeadStatus.NEW.value,
+            consent_to_contact=payload.consent_to_contact,
+            opted_out=not payload.consent_to_contact,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(lead)
+        session.flush()
+
+    # Determine and validate buyer association
+    if actor.role.name == RoleName.BUYER.value:
+        buyer_id = actor.id
+        if lead.email and lead.email != actor.email:
+            raise ConversationOwnershipError(
+                "You cannot start a conversation for a lead belonging to another email."
+            )
+    elif _is_admin(actor):
+        buyer_id = actor.id
+    elif actor.role.name == RoleName.SALES_EXECUTIVE.value:
+        if project.status != ProjectStatus.ACTIVE.value:
+            raise LeadNotActiveProjectError()
+        buyer = (
+            users_repository.get_user_by_email(session, lead.email)
+            if lead.email
+            else None
+        )
+        if buyer is not None:
+            buyer_id = buyer.id
         else:
             raise ConversationOwnershipError(
                 "A registered buyer account is required to start a conversation for this lead."

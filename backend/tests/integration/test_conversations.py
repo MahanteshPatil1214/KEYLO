@@ -32,6 +32,7 @@ from tests.conversation_support import (
     list_conversations,
     list_messages,
     post_message,
+    start_conversation,
     update_conversation_status,
 )
 from tests.lead_support import assign_lead, create_lead
@@ -192,6 +193,111 @@ def test_buyer_create_conversation_with_initial_message(
     assert messages["total"] == 1
     msg = messages["items"][0]
     assert msg["content"] == "Hello, I am interested in a 3BHK flat."
+    assert msg["sender_type"] == MessageSenderType.BUYER.value
+    assert msg["sender_id"] == str(buyer_user.id)
+
+
+def test_buyer_start_conversation_creates_lead_and_conversation(
+    client: TestClient,
+    override_db: None,
+    buyer_headers: dict[str, str],
+    buyer_user: User,
+    active_project: dict[str, Any],
+) -> None:
+    """Buyer clicks Chat on a project page: lead + conversation created in one call."""
+    data = start_conversation(
+        client,
+        buyer_headers,
+        project_id=active_project["id"],
+        full_name="Mahantesh Patil",
+        email=buyer_user.email,
+        phone="+919876543210",
+        initial_message="Hi, I am interested in a 3 BHK unit.",
+    )
+    assert data["project_id"] == active_project["id"]
+    assert data["buyer_id"] == str(buyer_user.id)
+    assert data["status"] == ConversationStatus.ACTIVE.value
+    assert "id" in data
+    assert "lead_id" in data
+
+    # The conversation is retrievable and linked to the right project
+    fetched = get_conversation(client, buyer_headers, data["id"])
+    assert fetched["project_id"] == active_project["id"]
+    assert fetched["lead_id"] == data["lead_id"]
+
+
+def test_buyer_start_conversation_reuses_existing_lead(
+    client: TestClient,
+    override_db: None,
+    buyer_headers: dict[str, str],
+    buyer_user: User,
+    active_project: dict[str, Any],
+    buyer_lead: dict[str, Any],
+) -> None:
+    """If a lead already exists for this buyer + project, it is reused."""
+    data = start_conversation(
+        client,
+        buyer_headers,
+        project_id=active_project["id"],
+        email=buyer_user.email,
+        phone=buyer_lead["phone"],
+    )
+    assert data["lead_id"] == buyer_lead["id"]
+    assert data["project_id"] == active_project["id"]
+    assert data["status"] == ConversationStatus.ACTIVE.value
+
+
+def test_buyer_start_conversation_for_inactive_project_fails(
+    client: TestClient,
+    override_db: None,
+    buyer_headers: dict[str, str],
+    draft_project: dict[str, Any],
+) -> None:
+    """Cannot start a conversation for a draft/inactive project."""
+    start_conversation(
+        client,
+        buyer_headers,
+        project_id=draft_project["id"],
+        expected_status=404,
+    )
+
+
+def test_buyer_start_conversation_without_contact_fails(
+    client: TestClient,
+    override_db: None,
+    buyer_headers: dict[str, str],
+    active_project: dict[str, Any],
+) -> None:
+    """At least one contact method (email or phone) is required."""
+    start_conversation(
+        client,
+        buyer_headers,
+        project_id=active_project["id"],
+        email=None,
+        phone=None,
+        expected_status=422,
+    )
+
+
+def test_buyer_start_conversation_persists_initial_message(
+    client: TestClient,
+    override_db: None,
+    buyer_headers: dict[str, str],
+    buyer_user: User,
+    active_project: dict[str, Any],
+) -> None:
+    data = start_conversation(
+        client,
+        buyer_headers,
+        project_id=active_project["id"],
+        email=buyer_user.email,
+        initial_message="I want a west-facing 3BHK.",
+    )
+    conv_id = data["id"]
+    messages = list_messages(client, buyer_headers, conv_id)
+    assert messages["total"] == 1
+    msg = messages["items"][0]
+    assert msg["content"] == "I want a west-facing 3BHK."
     assert msg["sender_type"] == MessageSenderType.BUYER.value
     assert msg["sender_id"] == str(buyer_user.id)
 

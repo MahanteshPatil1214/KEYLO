@@ -27,6 +27,11 @@ _TEST_ENVIRONMENT = {
     "LOG_LEVEL": "WARNING",
     "JWT_SECRET_KEY": TEST_JWT_SECRET,
     "ACCESS_TOKEN_EXPIRE_MINUTES": "30",
+    # Disable SQLAlchemy C extension: it is not thread-safe for concurrent
+    # access to the shared in-memory SQLite connection (StaticPool) used by the
+    # isolated test suite, which causes intermittent IndexError failures in
+    # tests such as test_concurrent_duplicate_creation.
+    "SQLALCHEMY_USE_CEXTENSION": "0",
 }
 os.environ.update(_TEST_ENVIRONMENT)
 

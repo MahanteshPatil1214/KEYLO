@@ -441,6 +441,21 @@ export function createBuyerConversation(payload: {
   });
 }
 
+export function startBuyerConversation(payload: {
+  project_id: string;
+  full_name: string;
+  email?: string | null;
+  phone?: string | null;
+  source?: string;
+  consent_to_contact?: boolean;
+  initial_message?: string | null;
+}): Promise<BuyerConversation> {
+  return authenticatedRequest<BuyerConversation>("/conversations/start", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function optOutContact(
   leadId: string,
   reason?: string | null,

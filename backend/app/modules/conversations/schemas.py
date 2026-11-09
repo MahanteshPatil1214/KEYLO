@@ -5,13 +5,22 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from app.modules.conversations.models import (
     ConversationStatus,
     MessageSenderType,
     MessageStatus,
 )
+from app.modules.leads.models import LeadSource
+from app.modules.leads.schemas import normalize_email, normalize_phone
 
 
 class ConversationCreateRequest(BaseModel):
@@ -33,6 +42,48 @@ class ConversationCreateRequest(BaseModel):
             stripped = value.strip()
             return stripped or None
         return value
+
+
+class ConversationStartRequest(BaseModel):
+    """Input to start a conversation for a project in one call.
+
+    Creates a lead (if none exists for this buyer + project) and a
+    conversation linked to that project, so a buyer can click "Chat"
+    on a project page and immediately begin messaging.
+    """
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    project_id: UUID
+    full_name: str = Field(min_length=2, max_length=255)
+    email: EmailStr | None = None
+    phone: str | None = Field(default=None, min_length=1, max_length=32)
+    source: LeadSource = LeadSource.WEBSITE
+    consent_to_contact: bool = True
+    initial_message: str | None = Field(default=None, max_length=10000)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _normalize_email(cls, value: object) -> object:
+        return normalize_email(value)
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def _normalize_phone(cls, value: object) -> object:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            stripped = value.strip()
+            return normalize_phone(stripped) if stripped else None
+        return value
+
+    @model_validator(mode="after")
+    def _validate_contact(self) -> ConversationStartRequest:
+        if self.email is None and self.phone is None:
+            raise ValueError(
+                "At least one contact method (email or phone) is required."
+            )
+        return self
 
 
 class ConversationStatusUpdateRequest(BaseModel):

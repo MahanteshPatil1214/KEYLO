@@ -15,6 +15,7 @@ from app.modules.conversations.schemas import (
     ConversationCreateRequest,
     ConversationListResponse,
     ConversationResponse,
+    ConversationStartRequest,
     ConversationStatusUpdateRequest,
     MessageCreateRequest,
     MessageListResponse,
@@ -26,6 +27,7 @@ from app.modules.conversations.service import (
     get_conversation,
     list_conversations,
     list_messages,
+    start_conversation,
     update_conversation_status,
 )
 
@@ -46,6 +48,28 @@ def create_conversation_endpoint(
     """Initiate a dialogue thread linked to a lead and project."""
 
     return create_conversation(db, actor=current_user, payload=payload)
+
+
+@router.post(
+    "/start",
+    response_model=ConversationResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Start a conversation for a project (creates lead if needed)",
+)
+def start_conversation_endpoint(
+    payload: ConversationStartRequest,
+    current_user: CurrentUser,
+    db: Annotated[Session, Depends(get_db)],
+) -> ConversationResponse:
+    """Start a conversation for a project in a single call.
+
+    Creates a lead for the buyer on the given project (or reuses an
+    existing one matched by email), then creates a conversation linked to
+    that project. Use this from a project page so the buyer can immediately
+    chat about that specific project.
+    """
+
+    return start_conversation(db, actor=current_user, payload=payload)
 
 
 @router.get(

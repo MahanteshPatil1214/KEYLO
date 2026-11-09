@@ -1,27 +1,62 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import {
   MapPin,
   FileText,
   ShieldCheck,
   CheckCircle2,
+  MessageSquare,
+  ArrowRight,
 } from "lucide-react";
 import {
   fetchBuyerProjects,
   fetchProjectFacts,
   fetchBuyerConversations,
+  startBuyerConversation,
   type Project,
   type ProjectFact,
 } from "./api";
+import { useBuyerUser } from "./BuyerAuthGuard";
 
 export function ProjectInfoPage() {
+  const { user } = useBuyerUser();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [isStarting, setIsStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
 
   // Fetch conversations to determine associated project context
   const { data: convData } = useQuery({
     queryKey: ["buyer", "conversations"],
     queryFn: () => fetchBuyerConversations(1, 10),
   });
+
+  const handleStartConversation = async () => {
+    if (!user || !activeProject) return;
+    setIsStarting(true);
+    setStartError(null);
+    try {
+      const conversation = await startBuyerConversation({
+        project_id: activeProject.id,
+        full_name: user.full_name,
+        email: user.email || undefined,
+        source: "WEBSITE",
+        consent_to_contact: true,
+        initial_message: "Hi, I'm interested in this project.",
+      });
+      // Refresh conversations so the new conversation appears in the list
+      await queryClient.invalidateQueries({ queryKey: ["buyer", "conversations"] });
+      navigate(`/buyer/conversations?conversation_id=${conversation.id}`);
+    } catch (err: any) {
+      setStartError(
+        err.message || "Failed to start conversation. Please try again."
+      );
+    } finally {
+      setIsStarting(false);
+    }
+  };
 
   // Fetch available projects
   const { data: projectsData, isLoading: projectsLoading } = useQuery({
@@ -35,6 +70,10 @@ export function ProjectInfoPage() {
 
   const activeProject =
     projects.find((p) => p.id === (selectedProjectId || defaultProjectId)) || projects[0] || null;
+
+  // Check if a conversation already exists for the active project
+  const existingConversationForProject =
+    convData?.items?.find((c) => c.project_id === activeProject?.id) || null;
 
   // Fetch facts for active project
   const { data: factsData, isLoading: factsLoading } = useQuery({
@@ -129,6 +168,74 @@ export function ProjectInfoPage() {
               {activeProject.description ||
                 "A distinguished luxury residential destination curated with architectural excellence, eco-conscious planning, and tailored buyer services."}
             </p>
+
+            {/* Start Conversation CTA */}
+            {existingConversationForProject ? (
+              <button
+                type="button"
+                onClick={() =>
+                  navigate(
+                    `/buyer/conversations?conversation_id=${existingConversationForProject.id}`
+                  )
+                }
+                className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-charcoal/15 bg-ivory px-5 py-3 text-xs font-semibold text-charcoal transition-colors hover:border-forest hover:text-forest"
+              >
+                <MessageSquare className="size-3.5" />
+                <span>Continue Conversation</span>
+                <ArrowRight className="size-3.5" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleStartConversation}
+                disabled={isStarting}
+                className={`mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-forest px-5 py-3 text-xs font-semibold text-ivory shadow-xs transition-colors duration-200 ${
+                  isStarting
+                    ? "bg-charcoal/40 cursor-not-allowed"
+                    : "hover:bg-forest-deep"
+                }`}
+              >
+                {isStarting ? (
+                  <>
+                    <svg
+                      className="animate-spin size-4"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    <span>Starting conversation...</span>
+                  </>
+                ) : (
+                  <>
+                    <MessageSquare className="size-3.5" />
+                    <span>Chat with Keylo Concierge</span>
+                  </>
+                )}
+              </button>
+            )}
+
+            {startError && (
+              <div
+                className="mt-4 p-3 rounded-lg border border-charcoal/20 bg-charcoal/5 text-[0.75rem] text-charcoal/80"
+                role="alert"
+              >
+                {startError}
+              </div>
+            )}
           </div>
 
           {/* Approved Fact Sheet */}

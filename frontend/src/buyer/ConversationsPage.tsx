@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { MessageSquare } from "lucide-react";
 import { useBuyerUser } from "./BuyerAuthGuard";
+import { useSearchParams } from "react-router-dom";
 import {
   fetchBuyerConversations,
   fetchConversationMessages,
@@ -28,7 +29,11 @@ export function ConversationsPage() {
   const { user } = useBuyerUser();
   const queryClient = useQueryClient();
 
-  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(
+    null
+  );
+  const [searchParams] = useSearchParams();
+  const urlConversationId = searchParams.get("conversation_id");
   const [mobileView, setMobileView] = useState<"list" | "chat">("chat");
   const [contextDrawerOpen, setContextDrawerOpen] = useState(false);
   const [tabletConvDrawerOpen, setTabletConvDrawerOpen] = useState(false);
@@ -88,10 +93,21 @@ export function ConversationsPage() {
 
   // Sync selected ID when conversations load
   useEffect(() => {
+    // If URL specifies a conversation, select it (refetch if not yet in list)
+    if (urlConversationId && !selectedConversationId) {
+      const found = conversations.find((c) => c.id === urlConversationId);
+      if (found) {
+        setSelectedConversationId(urlConversationId);
+      } else {
+        // Conversation may not be in the cached list yet; refetch to pick it up
+        queryClient.invalidateQueries({ queryKey: ["buyer", "conversations"] });
+      }
+      return;
+    }
     if (!selectedConversationId && activeConversation?.id) {
       setSelectedConversationId(activeConversation.id);
     }
-  }, [selectedConversationId, activeConversation?.id]);
+  }, [selectedConversationId, activeConversation?.id, urlConversationId, conversations, queryClient]);
 
   // 2. Fetch projects
   const { data: projectsData } = useQuery({
