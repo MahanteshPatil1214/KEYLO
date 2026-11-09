@@ -10,8 +10,14 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.db.session import get_db
 from app.modules.auth.dependencies import CurrentUser
-from app.modules.auth.schemas import LoginRequest, RegisterRequest, TokenResponse
-from app.modules.auth.service import login_user, register_buyer
+from app.modules.auth.schemas import (
+    LoginRequest,
+    RegisterRequest,
+    ResetPasswordRequest,
+    ResetPasswordResponse,
+    TokenResponse,
+)
+from app.modules.auth.service import login_user, register_buyer, reset_password
 from app.modules.users.models import User
 from app.modules.users.schemas import UserResponse
 
@@ -64,6 +70,30 @@ def login(
     return TokenResponse(
         access_token=result.access_token,
         expires_in=result.expires_in,
+    )
+
+
+@router.post(
+    "/reset-password",
+    response_model=ResetPasswordResponse,
+    summary="Reset password directly by email (website only, no tokens)",
+)
+def reset_password_endpoint(
+    payload: ResetPasswordRequest,
+    db: Annotated[Session, Depends(get_db)],
+) -> ResetPasswordResponse:
+    """Reset a user's password directly by email.
+
+    Works for every role (buyer, sales executive, administrator).  No email
+    token is involved — the caller supplies the email and new password
+    together.  Returns the same response whether or not the account exists,
+    so the endpoint cannot be used to enumerate registered accounts.
+    """
+
+    return reset_password(
+        db,
+        email=payload.email,
+        new_password=payload.password.get_secret_value(),
     )
 
 

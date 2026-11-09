@@ -185,3 +185,26 @@ export function fetchCurrentUser(accessToken: string): Promise<AuthenticatedUser
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 }
+
+export type ResetPasswordRequest = {
+  email: string;
+  password: string;
+  confirmPassword: string;
+};
+
+export type ResetPasswordResponse = {
+  message: string;
+};
+
+export function resetPasswordRequest(
+  input: ResetPasswordRequest,
+): Promise<ResetPasswordResponse> {
+  return request<ResetPasswordResponse>("/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({
+      email: input.email.trim().toLowerCase(),
+      password: input.password,
+      confirm_password: input.confirmPassword,
+    }),
+  });
+}

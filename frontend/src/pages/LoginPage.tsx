@@ -10,6 +10,7 @@ import {
   Eye,
   EyeOff,
   LoaderCircle,
+  Mail,
 } from "lucide-react";
 import {
   ApiError,
@@ -44,8 +45,7 @@ const loginSchema = z.object({
 
 type LoginValues = z.infer<typeof loginSchema>;
 
-const FORGOT_PASSWORD_MAILTO =
-  "mailto:hello@keylo.dev?subject=Keylo%20password%20reset";
+const FORGOT_PASSWORD_PATH = "/forgot-password";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -306,13 +306,15 @@ export function LoginPage() {
             />
             Remember me
           </label>
-          <a
-            href={FORGOT_PASSWORD_MAILTO}
-            title="Email Keylo support to reset your password"
-            className="inline-flex min-h-11 items-center text-sm font-semibold text-forest underline-offset-4 transition-colors duration-200 hover:text-forest-deep hover:underline"
+          <button
+            type="button"
+            onClick={() => navigate(FORGOT_PASSWORD_PATH)}
+            title="Request a password-reset link"
+            className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-forest underline-offset-4 transition-colors duration-200 hover:text-forest-deep hover:underline"
           >
+            <Mail size={16} aria-hidden="true" />
             Forgot password?
-          </a>
+          </button>
         </div>
 
         <button

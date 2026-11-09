@@ -37,6 +37,8 @@ services:
         condition: service_healthy
     ports:
       - "8000:8000"
+    env_file:
+      - backend/.env
     environment:
       APP_NAME: Keylo API
       ENVIRONMENT: development
@@ -51,7 +53,6 @@ services:
       JWT_ISSUER: keylo-api
       JWT_AUDIENCE: keylo-clients
       ACCESS_TOKEN_EXPIRE_MINUTES: "30"
-      GROQ_API_KEY: ${GROQ_API_KEY:-}
       GROQ_MODEL: openai/gpt-oss-120b
       POSTGRES_DB: keylo_db
       POSTGRES_USER: keylo
@@ -105,6 +106,8 @@ services:
     depends_on:
       backend:
         condition: service_started
+    env_file:
+      - backend/.env
     environment:
       DATABASE_URL: postgresql+psycopg2://keylo:change-me-local-dev@db:5432/keylo_db
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-use-a-random-64-character-secret-key-for-jwt-signing}
@@ -112,7 +115,6 @@ services:
       JWT_ISSUER: keylo-api
       JWT_AUDIENCE: keylo-clients
       ACCESS_TOKEN_EXPIRE_MINUTES: "30"
-      GROQ_API_KEY: ${GROQ_API_KEY:-}
       GROQ_MODEL: openai/gpt-oss-120b
     volumes:
       - ./backend:/app:ro

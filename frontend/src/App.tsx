@@ -17,6 +17,7 @@ import { ProductShowcase } from "./components/ProductShowcase";
 import { Workflow } from "./components/Workflow";
 import { DpdPPage } from "./pages/DpdPPage";
 import { LoginPage } from "./pages/LoginPage";
+import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { AdminAuthGuard } from "./admin/AdminAuthGuard";
@@ -98,6 +99,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/privacy" element={<DpdPPage />} />
           <Route path="/admin" element={<AdminAuthGuard />}>

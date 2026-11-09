@@ -11,9 +11,47 @@ from pydantic import (
     Field,
     SecretStr,
     field_validator,
+    model_validator,
 )
 
 from app.modules.auth.security import validate_password_strength
+
+
+class ResetPasswordRequest(BaseModel):
+    """Direct password-reset request (website only, no email tokens).
+
+    The endpoint intentionally returns the same response whether or not the
+    email is registered, so callers cannot enumerate accounts.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    email: EmailStr
+    password: SecretStr
+    confirm_password: SecretStr
+
+    @field_validator("email")
+    @classmethod
+    def _normalize_email(cls, value: EmailStr) -> str:
+        return str(value).strip().lower()
+
+    @field_validator("password")
+    @classmethod
+    def _validate_password(cls, value: SecretStr) -> SecretStr:
+        validate_password_strength(value.get_secret_value())
+        return value
+
+    @model_validator(mode="after")
+    def _passwords_match(self) -> ResetPasswordRequest:
+        if self.password.get_secret_value() != self.confirm_password.get_secret_value():
+            raise ValueError("Passwords do not match.")
+        return self
+
+
+class ResetPasswordResponse(BaseModel):
+    """Response confirming the password was reset."""
+
+    message: str
 
 
 class RegisterRequest(BaseModel):

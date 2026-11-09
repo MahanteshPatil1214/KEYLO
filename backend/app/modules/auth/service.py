@@ -19,6 +19,7 @@ from app.modules.auth.security import (
     verify_password,
     verify_password_against_dummy,
 )
+from app.modules.auth.schemas import ResetPasswordResponse
 from app.modules.users import repository
 from app.modules.users.exceptions import RolesNotInitializedError
 from app.modules.users.models import RoleName, User
@@ -172,3 +173,40 @@ def login_user(
         access_token=access_token,
         expires_in=settings.access_token_expire_minutes * 60,
     )
+
+
+def reset_password(
+    session: Session,
+    *,
+    email: str,
+    new_password: str,
+) -> ResetPasswordResponse:
+    """Reset a user's password directly by email (website only, no tokens).
+
+    Returns the same response whether or not the account exists, so the
+    endpoint cannot be used to enumerate registered email addresses.
+
+    If the account exists and is active, the password is updated.
+    """
+
+    validate_password_strength(new_password)
+
+    normalized_email = email.strip().lower()
+    user = repository.get_user_by_email(session, normalized_email)
+
+    # Even when no account exists we still hash the provided password so
+    # response timing does not trivially reveal whether the email is registered.
+    verify_password_against_dummy(new_password)
+
+    if user is not None and user.is_active:
+        user.password_hash = hash_password(new_password)
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+
+    return ResetPasswordResponse(
+        message=(
+            "If an account exists for this email, the password has been reset."
+        ),
+    )
+
