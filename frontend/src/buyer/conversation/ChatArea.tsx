@@ -1,3 +1,5 @@
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useState, useEffect, useRef } from "react";
 import {
   Send,
@@ -96,6 +98,13 @@ export function ChatArea({
       return "";
     }
   };
+
+  // Render AI assistant message content as Markdown so **bold**, *italic*, lists, etc. render properly.
+  const MarkdownMessage = ({ content }: { content: string }) => (
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ p: ({ children, ...props }) => <p {...props} className="whitespace-pre-line break-words text-[0.84rem] sm:text-[0.88rem]" /> }}>
+      {content}
+    </ReactMarkdown>
+  );
 
   const getLanguagePlaceholder = (lang: SupportedLanguage) => {
     switch (lang) {
@@ -293,10 +302,13 @@ export function ChatArea({
                           : "rounded-tl-xs bg-white border border-charcoal/10 text-charcoal"
                       }`}
                     >
-                      <p className="whitespace-pre-line break-words text-[0.84rem] sm:text-[0.88rem]">
-                        {msg.content}
-                      </p>
-
+                      {isAI ? (
+                        <MarkdownMessage content={msg.content} />
+                      ) : (
+                        <p className="whitespace-pre-line break-words text-[0.84rem] sm:text-[0.88rem]">
+                          {msg.content}
+                        </p>
+                      )}
                       <div
                         className={`mt-2 flex items-center justify-end gap-1.5 text-[0.62rem] ${
                           isBuyer ? "text-ivory/70" : "text-charcoal/45"
