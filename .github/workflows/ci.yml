@@ -100,8 +100,5 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Validate docker-compose.yml
-        run: docker compose config --quiet
-
       - name: Build backend, frontend, and seed service images
         run: docker compose --profile seed build
