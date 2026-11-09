@@ -306,13 +306,32 @@ The Admin Console uses a collapsible left sidebar with icon-only collapsed state
 
 ---
 
-## 7. What We Would Do Next
+## 8. What We Would Do Next
 
 1. **WebSocket real-time chat** — Replace REST polling with WebSocket connections for instant message delivery.
 2. **WhatsApp channel** — Integrate WATI or Interakt so buyers can chat via WhatsApp and messages sync to Keylo.
 3. **Email & SMS delivery** — Connect SendGrid (email) and Twilio (SMS) to the existing `notifications` table.
-4. **CI/CD pipeline** — GitHub Actions: lint → test → build → deploy on push to `main`.
+4. **CI/CD pipeline** — GitHub Actions: lint → test → build → deploy on push to `main`. Playwright E2E tests cover buyer portal button flows.
 5. **PostgreSQL in production** — Replace SQLite with a managed PostgreSQL instance (Railway, Supabase, or Neon).
 6. **Mobile apps** — React Native with shared business logic from the TypeScript API client layer.
 7. **Analytics export** — CSV/XLSX export for sales reports; Looker Studio connector.
 8. **Multi-tenancy** — Isolate data per developer/builder organisation so the platform can serve multiple real-estate companies.
+
+## 9. Testing
+
+### Backend
+- **229 Pytest tests** covering unit, integration, security, and AI assistant flows with mocked Groq provider.
+- Key concurrency fix: `session.expire_all()` in `_project_is_active()` prevents SQLite `StaticPool` stale-snapshot failures in concurrent lead-creation tests.
+- SQLAlchemy C extension disabled in tests (`SQLALCHEMY_USE_CEXTENSION=0`) to avoid thread-safety `IndexError` on shared in-memory SQLite.
+
+### Frontend
+- TypeScript strict typecheck + Vite production build.
+- **Playwright E2E tests** (`frontend/playwright.config.ts`, `frontend/tests/e2e/chat-button.spec.ts`):
+  - Chat button starts a new conversation from the Project Info page.
+  - Continue Conversation button opens an existing conversation thread.
+  - Quick inquiry chips populate the chat input field.
+  - Navigation buttons route to correct pages.
+- Runner: `npx playwright test`
+- Chromium browser installed via Playwright.
+
+---

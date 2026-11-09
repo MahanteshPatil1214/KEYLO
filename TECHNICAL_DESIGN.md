@@ -81,7 +81,7 @@ PostgreSQL (production) / SQLite (development)
 | Authentication | JWT (HS256) + role-based guards | Stateless, scalable, role isolation (ADMIN / SALES_EXECUTIVE / BUYER) |
 | AI provider | Groq API (`openai/gpt-oss-120b`) | Fast inference, provider-abstraction ready for swapping models |
 | Containerization | Docker Compose | Reproducible local services (PostgreSQL + backend + frontend) |
-| Testing | Pytest (224 backend tests) + Puppeteer E2E | Unit + integration + headless browser verification |
+| Testing | Pytest (229 backend tests) + Playwright E2E | Unit + integration + headless browser verification |
 
 ### 2.4 Backend Module Boundaries
 
@@ -312,11 +312,21 @@ From PROJECT.md Section 4.2 and subsequent scoping decisions:
 
 ## 9. Quality and Testing
 
-- **224 backend tests** (Pytest): unit, integration, security, AI assistant unit tests with mocked provider.
+- **229 backend tests** (Pytest): unit, integration, security, AI assistant unit tests with mocked provider.
 - **Frontend**: TypeScript strict typecheck + Vite production build.
-- **E2E verification**: Puppeteer headless browser suites covering all three portals.
+- **E2E verification**: Playwright headless browser tests covering buyer portal buttons and user flows:
+  - "Chat with Keylo Concierge" button starts a new conversation from the Project Info page.
+  - "Continue Conversation" button opens an existing conversation thread.
+  - Quick inquiry chips (Amenities, Configurations, etc.) populate the chat input field.
+  - Navigation buttons (Overview, Conversations, Profile) route to the correct pages.
 - **Booking concurrency**: Double-booking prevention tested via concurrent request scenarios.
 - **DPDP opt-out**: Backend service logic + frontend UI verified through existing test patterns.
+
+**Playwright Setup:**
+- Configuration: `frontend/playwright.config.ts` (Chromium project, Vite dev server integration)
+- Test location: `frontend/tests/e2e/chat-button.spec.ts`
+- Runner: `npx playwright test`
+- CI: Playwright E2E tests are available to add to the GitHub Actions workflow; backend and frontend jobs already pass on every push.
 
 ---
 
