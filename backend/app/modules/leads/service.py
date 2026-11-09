@@ -136,6 +136,10 @@ def _pages(total: int, page_size: int) -> int:
 
 
 def _project_is_active(session: Session, project_id: UUID) -> None:
+    # SQLite in-memory (used by the isolated test suite) with concurrent
+    # threads can return stale snapshots. Expire all cached instances so the
+    # query fetches fresh data from the database.
+    session.expire_all()
     project = get_project_by_id(session, project_id)
     if project is None or project.status != ProjectStatus.ACTIVE.value:
         raise ProjectNotFoundError()
