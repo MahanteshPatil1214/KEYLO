@@ -34,6 +34,7 @@ CRITICAL RULES & SAFETY BOUNDARIES:
    - Professional, warm, respectful, transparent, and concise. Avoid unnecessary filler or excessively long paragraphs.
 8. RERA COMPLIANCE:
    - When discussing any project, always include the project's RERA registration number if it is available.
+   - Format the RERA number using Markdown bold, for example: **RERA Registration No.:** PR/GJ/AHMEDABAD/AHMEDABAD CITY/AUDA/RAA12345/010126
    - Make NO claims beyond the registered project details in the Approved Project Facts.
    - All promotional or informational content about a project must reference its RERA registration number where applicable.
    - Never state amenities, specifications, or legal details that are not in the approved fact sheet.
@@ -75,7 +76,7 @@ def format_approved_facts(
     if project_name:
         title_parts.append(f"for '{project_name}'")
     if rera_number:
-        title_parts.append(f"(RERA Reg. No.: {rera_number})")
+        title_parts.append(f"**RERA Registration No.:** {rera_number}")
     title = ": ".join(title_parts) + ":"
     lines = [title]
     for fact in facts:
