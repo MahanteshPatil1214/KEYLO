@@ -53,4 +53,26 @@ class InactiveUserError(HTTPException):
         )
 
 
+class RefreshTokenError(HTTPException):
+    """The refresh token is missing, invalid, expired, or revoked."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token.",
+            headers=_BEARER_HEADER,
+        )
+
+
+class TokenRevokedError(HTTPException):
+    """The access token has been revoked server-side (for example on logout)."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="This access token has been revoked.",
+            headers=_BEARER_HEADER,
+        )
+
+
 

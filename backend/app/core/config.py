@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     jwt_issuer: str = "keylo-api"
     jwt_audience: str = "keylo-clients"
     access_token_expire_minutes: int = Field(default=30, ge=1, le=10080)
+    refresh_token_expire_minutes: int = Field(
+        default=10080, ge=1, le=525600, description="Lifetime of a refresh token in minutes (default 7 days)."
+    )
     lead_create_rate_limit_per_minute: int = Field(default=30, ge=1, le=10000)
     groq_api_key: SecretStr | None = Field(
         default=None,

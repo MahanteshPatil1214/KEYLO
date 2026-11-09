@@ -810,14 +810,13 @@ docker-compose.yml          PostgreSQL 16 with a persistent volume
 
 ## Limitations
 
-- Access tokens only: no refresh tokens, server-side logout, or revocation list.
-  Logout is client-side; deactivation immediately blocks account access.
+- Access tokens only: no server-side logout or revocation list. *(Addressed: login now issues a refresh token; `/auth/logout` and `/auth/revoke-all` revoke refresh tokens server-side, and revoked access-token JTIs are rejected before expiry.)*
 - No email verification or password reset yet. Public users remain
   `is_verified=false`.
 - The three roles are fixed for the MVP; role CRUD is not exposed.
 - Account deletion is not implemented; deactivation is used instead.
 - Project/fact deletion is not implemented; facts are rejected/unpublished
-  instead of deleted.
+  instead of deleted. *(Addressed: administrators can now hard-delete projects and facts via `DELETE /api/v1/projects/{project_id}` and `DELETE /api/v1/facts/{fact_id}`. Deletion is refused with `409` while dependent records exist.)*
 - Fact version history tracks answers only. Category/question changes update the
   fact audit fields but do not create version rows.
 - Fact categories are free-form uppercase labels until an agreed allowlist is

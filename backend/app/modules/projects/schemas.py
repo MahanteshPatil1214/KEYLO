@@ -261,3 +261,17 @@ class ApprovedFactContent(BaseModel):
     category: str
     question: str
     answer: str
+
+
+class ProjectDeletionResponse(BaseModel):
+    """Confirmation that a project was deleted."""
+
+    id: UUID
+    deleted: bool = True
+
+
+class FactDeletionResponse(BaseModel):
+    """Confirmation that a fact was deleted."""
+
+    id: UUID
+    deleted: bool = True

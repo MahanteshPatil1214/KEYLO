@@ -13,11 +13,13 @@ from app.modules.auth.dependencies import AdminUser, CurrentUser
 from app.modules.projects.models import FactStatus, ProjectStatus
 from app.modules.projects.schemas import (
     FactCreateRequest,
+    FactDeletionResponse,
     FactListResponse,
     FactResponse,
     FactUpdateRequest,
     FactVersionListResponse,
     ProjectCreateRequest,
+    ProjectDeletionResponse,
     ProjectListResponse,
     ProjectMetricsResponse,
     ProjectResponse,
@@ -27,6 +29,8 @@ from app.modules.projects.service import (
     approve_fact,
     create_fact,
     create_project,
+    delete_fact,
+    delete_project,
     get_fact,
     get_project,
     get_project_metrics_summary,
@@ -138,6 +142,26 @@ def update_project_endpoint(
         project_id=project_id,
         payload=payload,
     )
+
+
+@router.delete(
+    "/projects/{project_id}",
+    response_model=ProjectDeletionResponse,
+    tags=["projects"],
+    summary="Delete a project (admin only)",
+)
+def delete_project_endpoint(
+    project_id: UUID,
+    admin: AdminUser,
+    db: Annotated[Session, Depends(get_db)],
+) -> ProjectDeletionResponse:
+    """Delete a project and all of its facts.
+
+    Refuses with ``409`` when the project still has dependent records such as
+    leads, visit slots, bookings, or conversations. Requires the ADMIN role.
+    """
+
+    return delete_project(db, actor=admin, project_id=project_id)
 
 
 @router.post(
@@ -257,6 +281,22 @@ def reject_fact_endpoint(
     """Discard pending edits or unpublish an approved fact."""
 
     return reject_fact(db, actor=admin, fact_id=fact_id)
+
+
+@router.delete(
+    "/facts/{fact_id}",
+    response_model=FactDeletionResponse,
+    tags=["project-facts"],
+    summary="Delete a fact (admin only)",
+)
+def delete_fact_endpoint(
+    fact_id: UUID,
+    admin: AdminUser,
+    db: Annotated[Session, Depends(get_db)],
+) -> FactDeletionResponse:
+    """Delete a fact and its version history. Requires the ADMIN role."""
+
+    return delete_fact(db, actor=admin, fact_id=fact_id)
 
 
 @router.get(
